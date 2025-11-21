@@ -1,0 +1,9 @@
+{"vcs1":{"timestamp_begin":1762443330.169319648, "rt":7.08, "ut":6.53, "st":0.15}}
+{"vcselab":{"timestamp_begin":1762443337.307229503, "rt":0.27, "ut":0.17, "st":0.02}}
+{"link":{"timestamp_begin":1762443337.618014485, "rt":1.14, "ut":0.41, "st":0.14}}
+{"SNPS_VCS_INTERNAL_ROOT_START_TIME": 1762443329.862820476}
+{"VCS_COMP_START_TIME": 1762443329.862820476}
+{"VCS_COMP_END_TIME": 1762443338.822375180}
+{"VCS_USER_OPTIONS": "-full64 -sverilog -ntb_opts uvm-1.2 +incdir+/eda/synopsys/2022-23/RHELx86/VCS_2022.06-SP2/vcfca/linux64/vcst/lib/etc/uvm hello_uvm.sv -l comp.log"}
+{"vcs1": {"peak_mem": 3164586}}
+{"stitch_vcselab": {"peak_mem": 3164689}}

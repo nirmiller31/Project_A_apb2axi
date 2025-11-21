@@ -1,0 +1,24 @@
+{
+  "files": [
+    "tb/tb_top.sv",
+    "tb/**/*.sv",
+    "bringup_design/apb2axi.sv"
+  ],
+  "includePath": [
+    "tb",
+    "tb/pkg",
+    "tb/if",
+    "tb/env",
+    "tb/agent",
+    "tb/seq",
+    "tb/seq_item",
+    "tb/tests",
+    "bringup_design",
+    "$UVM_HOME/src"
+  ],
+  "defines": [
+    "UVM_NO_DEPRECATED",
+    "UVM_OBJECT_DO_NOT_NEED_CONSTRUCTOR"
+  ],
+  "topModule": "tb_top"
+}

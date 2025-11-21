@@ -1,0 +1,25 @@
+{
+  "verilog.linter.enabled": true,
+  "verilog.linter.filelist": "filelist.f",
+  "verilog.linter.linter": "iverilog",
+
+  "verilog.linter.includePaths": [
+    "tb",
+    "tb/pkg",
+    "tb/if",
+    "tb/env",
+    "tb/agent",
+    "tb/seq",
+    "tb/seq_item",
+    "tb/tests",
+    "bringup_design"
+  ],
+
+  "verilog.linter.defines": [
+    "UVM_NO_DEPRECATED",
+    "UVM_OBJECT_DO_NOT_NEED_CONSTRUCTOR"
+  ],
+
+  "verilog.linter.lintOnSave": true,
+  "verilog.linter.run": "onType"
+}

@@ -1,0 +1,6 @@
+{"vcs1":{"timestamp_begin":1762541327.525597892, "rt":0.71, "ut":0.43, "st":0.06}}
+{"SNPS_VCS_INTERNAL_ROOT_START_TIME": 1762541327.335792781}
+{"VCS_COMP_START_TIME": 1762541327.335792781}
+{"VCS_COMP_END_TIME": 1762541328.270601038}
+{"VCS_USER_OPTIONS": "-full64 -sverilog -ntb_opts uvm-1.2 -f /users/epnimo/Project/tb/filelist.f"}
+{"vcs1": {"peak_mem": 339116}}

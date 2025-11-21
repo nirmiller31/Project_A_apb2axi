@@ -1,0 +1,1 @@
+euclide -workspace ./WS -project_location ./design -project_name RTL -root_cud ./design/RTL.cud

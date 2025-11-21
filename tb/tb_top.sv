@@ -1,0 +1,134 @@
+
+import uvm_pkg::*;
+import apb2axi_tb_pkg::*;
+
+module tb_top;
+
+     logic          PCLK;
+     logic          PRESETn;
+
+     logic          ACLK;
+     logic          ARESETn;
+
+     initial begin
+          PCLK      = 0;
+          forever   #5ns PCLK = ~PCLK;
+     end
+
+     initial begin
+          ACLK      = 0;
+          forever   #5ns ACLK = ~ACLK;
+     end
+
+     initial begin
+          PRESETn   = 0;
+          ARESETn   = 0;
+          #50ns;
+          PRESETn   = 1;
+          ARESETn   = 1;
+     end
+
+     apb_if apb_vif (
+          .PCLK(PCLK), 
+          .PRESETn(PRESETn)
+     );
+
+     axi_if axi_vif (
+          .ACLK(ACLK), 
+          .ARESETn(ARESETn)
+     );
+
+     apb2axi dut (
+          // APB side
+          .PCLK      (PCLK),
+          .PRESETn   (PRESETn),
+          .PADDR     (apb_vif.PADDR),
+          .PWDATA    (apb_vif.PWDATA),
+          .PWRITE    (apb_vif.PWRITE),
+          .PSEL      (apb_vif.PSEL),
+          .PENABLE   (apb_vif.PENABLE),
+          .PRDATA    (apb_vif.PRDATA),
+          .PREADY    (apb_vif.PREADY),
+          .PSLVERR   (apb_vif.PSLVERR),
+
+          // ------------------ AXI side ------------------
+          .ACLK     (ACLK),
+          .ARESETn  (ARESETn),
+
+          // Write address channel
+          .AWID     (axi_vif.AWID),
+          .AWADDR   (axi_vif.AWADDR),
+          .AWLEN    (axi_vif.AWLEN),
+          .AWSIZE   (axi_vif.AWSIZE),
+          .AWBURST  (axi_vif.AWBURST),
+          .AWLOCK   (axi_vif.AWLOCK),
+          .AWCACHE  (axi_vif.AWCACHE),
+          .AWPROT   (axi_vif.AWPROT),
+          .AWVALID  (axi_vif.AWVALID),
+          .AWREADY  (axi_vif.AWREADY),
+
+          // Write data channel
+          .WDATA    (axi_vif.WDATA),
+          .WSTRB    (axi_vif.WSTRB),
+          .WLAST    (axi_vif.WLAST),
+          .WVALID   (axi_vif.WVALID),
+          .WREADY   (axi_vif.WREADY),
+
+          // Write response channel
+          .BID      (axi_vif.BID),
+          .BRESP    (axi_vif.BRESP),
+          .BVALID   (axi_vif.BVALID),
+          .BREADY   (axi_vif.BREADY),
+
+          // Read address channel
+          .ARID     (axi_vif.ARID),
+          .ARADDR   (axi_vif.ARADDR),
+          .ARLEN    (axi_vif.ARLEN),
+          .ARSIZE   (axi_vif.ARSIZE),
+          .ARBURST  (axi_vif.ARBURST),
+          .ARLOCK   (axi_vif.ARLOCK),
+          .ARCACHE  (axi_vif.ARCACHE),
+          .ARPROT   (axi_vif.ARPROT),
+          .ARVALID  (axi_vif.ARVALID),
+          .ARREADY  (axi_vif.ARREADY),
+
+          // Read data channel
+          .RID      (axi_vif.RID),
+          .RDATA    (axi_vif.RDATA),
+          .RRESP    (axi_vif.RRESP),
+          .RLAST    (axi_vif.RLAST),
+          .RVALID   (axi_vif.RVALID),
+          .RREADY   (axi_vif.RREADY)
+     );
+
+     // initial begin
+     //      uvm_config_db#(virtual apb_if)::set(null, "uvm_test_top.env", "apb_vif", apb_vif);
+     //      uvm_config_db#(virtual axi_if)::set(null, "uvm_test_top.env", "axi_vif", axi_vif);
+
+     //      run_test("apb2axi_base_test");
+     // end
+
+     initial begin
+          #1ns;
+          $display(">>> TB_TOP alive at %0t  PCLK=%0b ACLK=%0b", $time, PCLK, ACLK);
+     end
+
+     initial begin
+          #100ns;
+          $display(">>> TB_TOP still running at %0t", $time);
+     end
+
+     initial begin
+          uvm_config_db#(virtual apb_if)::set(null, "uvm_test_top.env", "vif", apb_vif);
+          uvm_config_db#(virtual axi_if)::set(null, "uvm_test_top.env", "vif", axi_vif);
+          run_test("apb2axi_base_test");
+     end
+
+     // initial begin
+     //      #10us;
+     //      `uvm_info("TB_TOP", "Global simulation timeout reached", UVM_NONE)
+     //      $finish;
+     // end
+
+
+endmodule

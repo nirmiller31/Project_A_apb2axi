@@ -1,0 +1,2 @@
+eclipse.preferences.version=1
+org.eclipse.jdt.launching.PREF_VM_XML=<?xml version\="1.0" encoding\="UTF-8" standalone\="no"?>\n<vmSettings defaultVM\="57,org.eclipse.jdt.internal.debug.ui.launcher.StandardVMType13,1762072730687">\n    <vmType id\="org.eclipse.jdt.internal.debug.ui.launcher.StandardVMType">\n        <vm id\="1762072730687" javadocURL\="https\://docs.oracle.com/en/java/javase/17/docs/api/" name\="jre" path\="/tools/eda/synopsys/2022-23/RHELx86/EUCLIDE_2022.06-SP2/Eclipse_4.22/linux.gtk.x86_64/eclipse/jre"/>\n    </vmType>\n</vmSettings>\n

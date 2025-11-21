@@ -1,0 +1,9 @@
+{"vcs1":{"timestamp_begin":1762543341.264432830, "rt":3.77, "ut":3.24, "st":0.12}}
+{"vcselab":{"timestamp_begin":1762543345.070672139, "rt":0.28, "ut":0.16, "st":0.03}}
+{"link":{"timestamp_begin":1762543345.383915853, "rt":0.50, "ut":0.10, "st":0.05}}
+{"SNPS_VCS_INTERNAL_ROOT_START_TIME": 1762543341.059611456}
+{"VCS_COMP_START_TIME": 1762543341.059611456}
+{"VCS_COMP_END_TIME": 1762543345.926632242}
+{"VCS_USER_OPTIONS": "-full64 -sverilog -ntb_opts uvm-1.2 -f /users/epnimo/Project/tb/filelist.f -l comp.log"}
+{"vcs1": {"peak_mem": 387720}}
+{"stitch_vcselab": {"peak_mem": 232964}}

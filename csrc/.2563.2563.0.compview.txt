@@ -1,0 +1,6 @@
+{"vcs1":{"timestamp_begin":1762587327.305719068, "rt":0.75, "ut":0.43, "st":0.05}}
+{"SNPS_VCS_INTERNAL_ROOT_START_TIME": 1762587327.035037196}
+{"VCS_COMP_START_TIME": 1762587327.035037196}
+{"VCS_COMP_END_TIME": 1762587328.097213372}
+{"VCS_USER_OPTIONS": "-full64 -sverilog -ntb_opts uvm-1.2 tb/tb_top.sv tb/pkg/apb2axi_tb_pkg.sv tb/env/apb2axi_env.sv tb/agent/apb_agent.sv tb/agent/apb_driver.sv tb/agent/apb_monitor.sv tb/seq/apb2axi_base_seq.sv tb/tests/apb2axi_base_test.sv rtl/apb2axi.sv -top tb_top -l comp.log"}
+{"vcs1": {"peak_mem": 338728}}

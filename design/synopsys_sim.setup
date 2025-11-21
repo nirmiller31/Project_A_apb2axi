@@ -1,0 +1,11 @@
+--VCS setup file for ASIC
+--Mapping default work directory
+WORK > DEFAULT
+DEFAULT : ./work
+--Library Mapping
+--STATS_PKG : ./stat_work
+--MEM_PKG : ./mem_work
+--Simulation variables
+TIMEBASE = NS
+TIME_RESOLUTION = 1NS
+
