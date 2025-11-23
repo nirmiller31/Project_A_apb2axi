@@ -40,6 +40,16 @@ package apb2axi_pkg;
      // --------------------------------------------------
      // Directory entry
      // --------------------------------------------------
+
+     typedef enum logic [2:0] {
+          DIR_ST_EMPTY,      // slot unused
+          DIR_ST_STAGED,     // regs written but no commit yet (optional)
+          DIR_ST_PENDING,    // committed, waiting to be issued
+          DIR_ST_ISSUED,     // issued to AXI (or builder)
+          DIR_ST_DONE,       // completed OK
+          DIR_ST_ERROR       // completed with error
+     } dir_state_e;
+
      typedef struct packed {
           logic                    is_write;
           logic [AXI_ADDR_W-1:0]   addr;
@@ -47,6 +57,7 @@ package apb2axi_pkg;
           logic [2:0]              size;
           logic [1:0]              burst;
           logic [TAG_W-1:0]        tag;
+          dir_state_e              state;
      } directory_entry_t;
      parameter int REQ_WIDTH  = $bits(directory_entry_t);
 

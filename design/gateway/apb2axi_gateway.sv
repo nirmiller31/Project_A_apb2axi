@@ -8,18 +8,6 @@
 
 import apb2axi_pkg::*;
 
-// -----------------------------------------------------------------------------
-// apb2axi_gateway.sv
-// Current Gateway stage:
-//   * Interfaces directly with APB (via apb2axi_reg)
-//   * Each APB write sequence builds a descriptor
-//   * When commit_pulse fires, descriptor is pushed into the Directory
-//   * Directory currently just enqueues entries with incrementing TAGs
-//
-// Future extensions (later):
-//   - Add commit_ctrl / AXI builders to dispatch to AXI bus
-//   - Add completion path to clear Directory entries
-// -----------------------------------------------------------------------------
 module apb2axi_gateway #(
      parameter int AXI_ADDR_W = AXI_ADDR_W,
      parameter int APB_ADDR_W = APB_ADDR_W
@@ -35,8 +23,11 @@ module apb2axi_gateway #(
      output logic                  PREADY,
      output logic                  PSLVERR,
 
-     output logic                  commit_pulse,
-     output directory_entry_t      dir_entry
+     // ---------------- Directory → TxnMgr interface ----------------
+     output logic                  dir_pending_valid,
+     output directory_entry_t      dir_pending_entry,
+     output logic [TAG_W-1:0]      dir_pending_tag,
+     input  logic                  dir_pending_pop
 );
 
      // ---------------- Internal wiring ----------------
@@ -80,21 +71,12 @@ module apb2axi_gateway #(
           .addr         (addr),
           .len          (len),
           .size         (size),
-          .is_write     (is_write)
-          // FIXME add completion inputs yet
+          .is_write     (is_write),
+          .pending_valid(dir_pending_valid),
+          .pending_entry(dir_pending_entry),
+          .pending_tag  (dir_pending_tag),
+          .pending_pop  (dir_pending_pop)
      );
-
-     // -------------------------------------------------
-     // Pack to generic directory_entry_t
-     // -------------------------------------------------
-     always_comb begin
-        dir_entry.is_write = is_write;
-        dir_entry.addr     = addr;
-        dir_entry.len      = len;
-        dir_entry.size     = size;
-        dir_entry.burst    = 2'b01;  // INCR for now
-        dir_entry.tag      = '0;     // FIXME: real tag manager later
-    end
 
 endmodule
 

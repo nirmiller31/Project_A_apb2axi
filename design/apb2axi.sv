@@ -86,8 +86,10 @@ module apb2axi #(
      // ============================================================
      // Internal wiring from Gateway (APB side)
      // ============================================================
-     logic                  commit_pulse;
-     directory_entry_t      gw_entry;
+     logic                  dir_pending_valid;
+     directory_entry_t      dir_pending_entry;
+     logic [TAG_W-1:0]      dir_pending_tag;
+     logic                  dir_pending_pop;
 
      // ============================================================
      // Instantiate Gateway (APB side = reg + directory)
@@ -105,8 +107,11 @@ module apb2axi #(
           .PWDATA        (PWDATA),
           .PREADY        (PREADY),
           .PSLVERR       (PSLVERR),
-          .commit_pulse  (commit_pulse),
-          .dir_entry     (gw_entry)
+
+          .dir_pending_valid (dir_pending_valid),
+          .dir_pending_entry (dir_pending_entry),
+          .dir_pending_tag   (dir_pending_tag),
+          .dir_pending_pop   (dir_pending_pop)
      );
 
      // ============================================================
@@ -160,7 +165,7 @@ module apb2axi #(
      // assign rd_push_valid = commit_pulse & ~gw_entry.is_write;
      // assign rd_push_data  = gw_entry;
 
-     assign rd_pop_ready = 1'b1;             // FIXME later
+     // assign rd_pop_ready = 1'b1;             // FIXME later
 
      // ============================================================
      // Instantiate Write_FIFO
@@ -184,7 +189,7 @@ module apb2axi #(
      // Builders: consume FIFO, drive AXI
      // --------------------------------------------------------------------
 
-     apb2axi_wr_builder #(
+     apb2axi_write_builder #(
           .AXI_ADDR_W   (AXI_ADDR_W),
           .AXI_DATA_W   (AXI_DATA_W),
           .AXI_ID_W     (AXI_ID_W),
@@ -212,15 +217,16 @@ module apb2axi #(
           .wstrb        (WSTRB),
           .wlast        (WLAST),
           .wvalid       (WVALID),
-          .wready       (WREADY),
+          .wready       (WREADY)
+          // ,
 
-          .bid          (BID),
-          .bresp        (BRESP),
-          .bvalid       (BVALID),
-          .bready       (BREADY)
+          // .bid          (BID),
+          // .bresp        (BRESP),
+          // .bvalid       (BVALID),
+          // .bready       (BREADY)
      );
 
-     apb2axi_rd_builder #(
+     apb2axi_read_builder #(
           .AXI_ADDR_W   (AXI_ADDR_W),
           .AXI_DATA_W   (AXI_DATA_W),
           .AXI_ID_W     (AXI_ID_W),
@@ -261,8 +267,10 @@ module apb2axi #(
           .aclk          (ACLK),
           .aresetn       (ARESETn),
 
-          .commit_pulse  (commit_pulse),
-          .gw_entry      (gw_entry),
+          .pending_valid (dir_pending_valid),
+          .pending_entry (dir_pending_entry),
+          .pending_tag   (dir_pending_tag),
+          .pending_pop   (dir_pending_pop),
 
           .wr_push_valid (wr_push_valid),
           .wr_push_ready (wr_push_ready),

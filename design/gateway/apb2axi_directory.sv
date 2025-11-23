@@ -14,35 +14,65 @@ module apb2axi_directory #(
      input  logic [AXI_ADDR_W-1:0]      addr,
      input  logic [7:0]                 len,
      input  logic [2:0]                 size,
-     input  logic                       is_write
+     input  logic                       is_write,
+
+     output logic                       pending_valid,
+     output directory_entry_t           pending_entry,
+     output logic [TAG_W_P-1:0]         pending_tag,
+     input  logic                       pending_pop
 );
      // Directory entry array
      directory_entry_t                  dir_mem [TAG_NUM_P];
-     logic [TAG_W_P-1:0]                wr_ptr;   // simple incrementing tag pointer, FIXME- make it complex
-     logic                              wr_fire;  // internal strobe
+     logic [TAG_W_P-1:0]                dir_wr_ptr;   // simple incrementing tag pointer, FIXME- make it complex
+     logic [TAG_W_P-1:0]                dir_rd_ptr;
 
-     always_ff @(posedge pclk) begin
-     if (!presetn) begin
-          wr_ptr                        <= '0;
-          for (int i = 0; i < TAG_NUM_P; i++) begin
-               dir_mem[i]               <= '0;
+     always_ff @(posedge pclk or negedge presetn) begin
+          if (!presetn) begin
+               dir_wr_ptr <= '0;
+               dir_rd_ptr <= '0;
+               for (int i = 0; i < TAG_NUM_P; i++) begin
+                    dir_mem[i].state <= DIR_ST_EMPTY;
+                    dir_mem[i].tag   <= i[TAG_W_P-1:0];
+                    dir_mem[i].addr  <= '0;
+                    dir_mem[i].len   <= '0;
+                    dir_mem[i].size  <= '0;
+                    dir_mem[i].burst <= 2'b01; // INCR default
+                    dir_mem[i].is_write <= '0;
+               end
+          end else begin
+               // New committed request
+               if (commit_pulse) begin
+                    dir_mem[dir_wr_ptr].addr     <= addr;
+                    dir_mem[dir_wr_ptr].len      <= len;
+                    dir_mem[dir_wr_ptr].size     <= size;
+                    dir_mem[dir_wr_ptr].is_write <= is_write;
+                    dir_mem[dir_wr_ptr].burst    <= 2'b01;        // INCR for now
+                    dir_mem[dir_wr_ptr].tag      <= dir_wr_ptr;
+                    dir_mem[dir_wr_ptr].state    <= DIR_ST_PENDING;
+                    dir_wr_ptr                   <= dir_wr_ptr + 1'b1; // simple wrap
+               end
+
+               // Txn_mgr took one pending entry → mark as ISSUED
+               if (pending_pop && pending_valid) begin
+                    dir_mem[dir_rd_ptr].state <= DIR_ST_ISSUED;
+                    dir_rd_ptr                <= dir_rd_ptr + 1'b1;
+               end
           end
-     end else if (commit_pulse) begin
-          dir_mem[wr_ptr].addr          <= addr;
-          dir_mem[wr_ptr].len           <= len;
-          dir_mem[wr_ptr].size          <= size;
-          dir_mem[wr_ptr].is_write      <= is_write;
-          dir_mem[wr_ptr].tag           <= wr_ptr;
-          wr_ptr                        <= wr_ptr + 1'b1;  // simple wrap-around
-     end
      end
 
-     // (Optional) waveform debug: print each enqueue
+     // Combinational "next pending" view
+     always_comb begin
+          pending_tag   = dir_rd_ptr;
+          pending_entry = dir_mem[dir_rd_ptr];
+          pending_valid = (dir_mem[dir_rd_ptr].state == DIR_ST_PENDING);
+     end
+
+     // Debug
      // synthesis translate_off
      always_ff @(posedge pclk)
-     if (commit_pulse)
-          $display("%t [GATEWAY] Enqueued TAG=%0d  is_write=%0b addr=%h len=%0d size=%0d",
-                    $time, wr_ptr, is_write, addr, len, size);
+          if (commit_pulse)
+               $display("%t [DIR] Enq TAG=%0d is_wr=%0b addr=%h len=%0d size=%0d",
+                         $time, dir_wr_ptr, is_write, addr, len, size);
      // synthesis translate_on
 
 endmodule

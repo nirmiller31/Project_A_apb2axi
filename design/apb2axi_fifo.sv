@@ -6,6 +6,8 @@
  * Description   : Valid/ready FIFO
  *------------------------------------------------------------------------------*/
 
+import apb2axi_pkg::*;
+
 module apb2axi_fifo #(
     parameter int ENTRY_WIDTH = 64
 )(

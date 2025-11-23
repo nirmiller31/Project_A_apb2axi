@@ -42,12 +42,8 @@ module apb2axi_write_builder #(
     // ----------------------------------------------------------
     // Extract fields from FIFO entry
     // ----------------------------------------------------------
-    logic                             is_write;
-    logic [2:0]                       size;
-    logic [3:0]                       len;
-    logic [AXI_ADDR_W-1:0]            addr;
-
-    assign {is_write, size, len, addr} = wr_pop_data;
+    directory_entry_t entry;
+    assign entry = wr_pop_data;
 
     // ----------------------------------------------------------
     // State machine for AW/W handshake
@@ -66,9 +62,9 @@ module apb2axi_write_builder #(
         wr_pop_ready = 1'b0;
 
         awid    = '0;
-        awaddr  = addr;
+        awaddr  = entry.addr;
         awlen   = 4'd0;       // single beat
-        awsize  = size;
+        awsize  = entry.size;
         awburst = 2'b01;      // INCR
         awlock  = 1'b0;
         awcache = 4'b0011;    // Normal, non-bufferable, modifiable
@@ -83,7 +79,7 @@ module apb2axi_write_builder #(
         case(state)
 
             IDLE: begin
-                if (wr_pop_valid && is_write) begin
+                if (wr_pop_valid && entry.is_write) begin
                     next_state = SEND_AW;
                 end
             end

@@ -14,57 +14,72 @@ import apb2axi_pkg::*;
 module apb2axi_txn_mgr #(
      parameter int FIFO_ENTRY_W = REQ_WIDTH
 )(
-     input  logic                     aclk,
-     input  logic                     aresetn,
+     input  logic                       aclk,
+     input  logic                       aresetn,
 
      // From Gateway (directory entry at commit time)
-     input  logic                     commit_pulse,
-     input  directory_entry_t         gw_entry,
+     input  logic                       pending_valid,
+     input  directory_entry_t           pending_entry,
+     input  logic [TAG_W-1:0]           pending_tag,
+     output logic                       pending_pop,
 
      // To WRITE request FIFO
-     output logic                     wr_push_valid,
-     input  logic                     wr_push_ready,
-     output logic [FIFO_ENTRY_W-1:0]  wr_push_data,
+     output logic                       wr_push_valid,
+     input  logic                       wr_push_ready,
+     output logic [FIFO_ENTRY_W-1:0]    wr_push_data,
 
      // To READ request FIFO
-     output logic                     rd_push_valid,
-     input  logic                     rd_push_ready,
-     output logic [FIFO_ENTRY_W-1:0]  rd_push_data
+     output logic                       rd_push_valid,
+     input  logic                       rd_push_ready,
+     output logic [FIFO_ENTRY_W-1:0]    rd_push_data
 
-     // Future hooks:
-     // - inputs from B/R channels for outstanding counters
-     // - backpressure to APB (PREADY) via gateway
 );
 
-     // Simple pass-through routing for now:
-     // write entries -> WR FIFO, read entries -> RD FIFO.
-     // Later we can add credits / outstanding limit / arbitration.
+     // Packed view of the directory entry
+     logic [FIFO_ENTRY_W-1:0] entry_packed;
+     assign entry_packed = pending_entry;
 
-     // Pack struct into FIFO word
-     wire [FIFO_ENTRY_W-1:0] entry_packed = gw_entry;
-
+     // Simple combinational dispatcher
      always_comb begin
-          // defaults
+          // Defaults
+          pending_pop   = 1'b0;
           wr_push_valid = 1'b0;
-          wr_push_data  = '0;
           rd_push_valid = 1'b0;
+          wr_push_data  = '0;
           rd_push_data  = '0;
 
-          if (commit_pulse) begin
-               if (gw_entry.is_write) begin
-                    wr_push_valid = 1'b1;
-                    wr_push_data  = entry_packed;
-                    // we ignore wr_push_ready for now – backpressure TBD
+          if (pending_valid) begin
+               if (pending_entry.is_write) begin
+                    // Write request -> WR FIFO
+                    if (wr_push_ready) begin
+                         wr_push_valid = 1'b1;
+                         wr_push_data  = entry_packed;
+                         pending_pop   = 1'b1;
+                    end
                end else begin
-                    rd_push_valid = 1'b1;
-                    rd_push_data  = entry_packed;
-                    // similarly, ignore rd_push_ready for now
+                    // Read request -> RD FIFO
+                    if (rd_push_ready) begin
+                         rd_push_valid = 1'b1;
+                         rd_push_data  = entry_packed;
+                         pending_pop   = 1'b1;
+                    end
                end
           end
      end
 
-     // No sequential state yet – reserved for future credits/scoreboard
+     // No sequential state yet – room for future credits / scheduling
      // always_ff @(posedge aclk or negedge aresetn) begin
      // end
+
+     // Optional debug
+     // synthesis translate_off
+     always_ff @(posedge aclk) begin
+          if (pending_valid && pending_pop) begin
+               $display("%t [TXN_MGR] TAG=%0d -> %s FIFO",
+                         $time, pending_tag,
+                         pending_entry.is_write ? "WR" : "RD");
+          end
+     end
+     // synthesis translate_on
 
 endmodule

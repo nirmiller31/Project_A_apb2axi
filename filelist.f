@@ -27,9 +27,10 @@ $PROJECT_HOME/design/axi_if.sv
 $PROJECT_HOME/design/gateway/apb2axi_reg.sv
 $PROJECT_HOME/design/gateway/apb2axi_directory.sv
 $PROJECT_HOME/design/gateway/apb2axi_gateway.sv
-$PROJECT_HOME/design/gateway/apb2axi_fifo.sv
-$PROJECT_HOME/design/builder/apb2axi_read_builder.sv
+$PROJECT_HOME/design/apb2axi_fifo.sv
 $PROJECT_HOME/design/builder/apb2axi_write_builder.sv
+$PROJECT_HOME/design/builder/apb2axi_read_builder.sv
+$PROJECT_HOME/design/apb2axi_txn_mgr.sv
 $PROJECT_HOME/design/apb2axi.sv
 
 # === Interfaces ===
