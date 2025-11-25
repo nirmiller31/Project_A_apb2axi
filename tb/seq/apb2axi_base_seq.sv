@@ -6,6 +6,8 @@ class apb2axi_base_seq extends uvm_sequence #(apb_seq_item);
 
      `uvm_object_utils(apb2axi_base_seq)
 
+     apb2axi_env m_env;
+
      function new(string name = "apb2axi_base_seq");
           super.new(name);
      endfunction

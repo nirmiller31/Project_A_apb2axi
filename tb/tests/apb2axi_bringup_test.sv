@@ -19,6 +19,7 @@ class apb2axi_bringup_test extends apb2axi_base_test;
           `uvm_info("BRINGUP_TEST", "Starting bring-up test", apb2axi_verbosity)
 
           seq = apb2axi_bringup_seq::type_id::create("seq");
+          seq.m_env = env;
           seq.start(env.apb_ag.seqr);
 
           `uvm_info("BRINGUP_TEST", "Bring-up sequence finished", apb2axi_verbosity)

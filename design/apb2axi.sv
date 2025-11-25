@@ -165,8 +165,6 @@ module apb2axi #(
      // assign rd_push_valid = commit_pulse & ~gw_entry.is_write;
      // assign rd_push_data  = gw_entry;
 
-     // assign rd_pop_ready = 1'b1;             // FIXME later
-
      // ============================================================
      // Instantiate Write_FIFO
      // ============================================================
@@ -184,6 +182,8 @@ module apb2axi #(
           .pop_ready  (rd_pop_ready),
           .pop_data   (rd_pop_data)
      );
+
+     assign rd_pop_ready = 1'b1;             // FIXME later
 
      // --------------------------------------------------------------------
      // Builders: consume FIFO, drive AXI
@@ -236,7 +236,7 @@ module apb2axi #(
           .aresetn      (ARESETn),
 
           .rd_pop_valid (rd_pop_valid),
-          .rd_pop_ready (rd_pop_ready),
+          .rd_pop_ready (), //(rd_pop_ready),
           .rd_pop_data  (rd_pop_data),
 
           .arid         (ARID),
@@ -255,7 +255,7 @@ module apb2axi #(
           .rresp        (RRESP),
           .rlast        (RLAST),
           .rvalid       (RVALID),
-          .rready       (RREADY)
+          .rready       ()
      );
 
      // ============================================================
@@ -279,6 +279,79 @@ module apb2axi #(
           .rd_push_valid (rd_push_valid),
           .rd_push_ready (rd_push_ready),
           .rd_push_data  (rd_push_data)
+     );
+
+     // ============================================================
+     // Completion Queue (CQ) between response_collector and handler
+     // ============================================================
+     logic                    cq_push_valid;
+     logic                    cq_push_ready;
+     logic [COMPLETION_W-1:0] cq_push_data;
+
+     logic                    cq_pop_valid;
+     logic                    cq_pop_ready;
+     logic [COMPLETION_W-1:0] cq_pop_data;
+
+     // ============================================================
+     // Completion FIFO (CQ)
+     // ============================================================
+     apb2axi_fifo #(
+          .ENTRY_WIDTH (COMPLETION_W)
+     ) u_cq_fifo (
+          .clk        (ACLK),
+          .resetn     (ARESETn),
+
+          .push_valid (cq_push_valid),
+          .push_ready (cq_push_ready),
+          .push_data  (cq_push_data),
+
+          .pop_valid  (cq_pop_valid),
+          .pop_ready  (cq_pop_ready),
+          .pop_data   (cq_pop_data)
+     );
+
+     apb2axi_response_collector #(
+          .AXI_ID_W      (AXI_ID_W),
+          .TAG_W_P       (TAG_W),
+          .COMPLETION_WP (COMPLETION_W)
+     ) u_resp_collector (
+          .aclk          (ACLK),
+          .aresetn       (ARESETn),
+
+          // AXI B channel
+          .bid           (BID),
+          .bresp         (BRESP),
+          .bvalid        (BVALID),
+          .bready        (BREADY),   // top-level BREADY now comes from here
+
+          // AXI R channel
+          .rid           (RID),
+          .rresp         (RRESP),
+          .rlast         (RLAST),
+          .rvalid        (RVALID),
+          .rready        (RREADY),   // top-level RREADY now comes from here
+
+          // CQ write side
+          .cq_push_valid (cq_push_valid),
+          .cq_push_ready (cq_push_ready),
+          .cq_push_data  (cq_push_data)
+     );
+
+     apb2axi_response_handler #(
+          .TAG_W_P       (TAG_W),
+          .COMPLETION_WP (COMPLETION_W)
+     ) u_resp_handler (
+          .pclk          (ACLK),         // temporary: same clock as collector
+          .presetn       (ARESETn),
+
+          .cq_pop_valid  (cq_pop_valid),
+          .cq_pop_ready  (cq_pop_ready),
+          .cq_pop_data   (cq_pop_data),
+
+          // Directory hook-up will come later
+          .dir_cpl_valid (),
+          .dir_cpl_tag   (),
+          .dir_cpl_error ()
      );
 
 

@@ -75,9 +75,10 @@ module apb2axi_txn_mgr #(
      // synthesis translate_off
      always_ff @(posedge aclk) begin
           if (pending_valid && pending_pop) begin
-               $display("%t [TXN_MGR] TAG=%0d -> %s FIFO",
-                         $time, pending_tag,
-                         pending_entry.is_write ? "WR" : "RD");
+               $display("%t [TXN_MGR] TAG=%0d -> %s FIFO", $time, pending_tag, pending_entry.is_write ? "WR" : "RD");
+          end
+          if (pending_valid && !pending_pop) begin
+               $display("%t [TXN_MGR] BLOCKED pending_valid=1 is_write=%0b wr_ready=%0b rd_ready=%0b", $time, pending_entry.is_write, wr_push_ready, rd_push_ready);
           end
      end
      // synthesis translate_on

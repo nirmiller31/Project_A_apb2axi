@@ -22,7 +22,7 @@ class apb2axi_bringup_seq extends apb2axi_base_seq;
      endfunction
 
      task body();
-          apb_seq_item req;
+          axi_seq_item axi_got;
 
           `uvm_info("BRINGUP_SEQ", "Starting APB2AXI bringup sequence", UVM_LOW)
 
@@ -35,6 +35,18 @@ class apb2axi_bringup_seq extends apb2axi_base_seq;
           // 3) Program addr_lo and trigger commit_pulse
           apb_write_reg(16'h0000, 32'h0000_1000);
 
+          if (m_env == null)
+               `uvm_fatal("BRINGUP_SEQ", "m_env is NULL – test must set it")
+
+          // Block until AXI monitor reports one transaction
+          m_env.axi_mon_fifo.get(axi_got);
+
+          if ((axi_got.write != 0) || (axi_got.addr  != 64'h0000_0000_0000_1000)) begin
+               `uvm_error("BRINGUP_SEQ", $sformatf("Unexpected AXI tx: %s", axi_got.convert2string()))
+          end
+          else begin
+               `uvm_info("BRINGUP_SEQ", $sformatf("Matched AXI READ at 0x%0h OK", axi_got.addr), apb2axi_verbosity)
+          end
           #200ns;
 
      endtask
