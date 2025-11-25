@@ -109,4 +109,11 @@ module apb2axi_write_builder #(
             state <= next_state;
     end
 
+    always_ff @(posedge aclk) begin
+        if (awvalid && awready)
+            $display("%t [WR_BUILDER] AW handshake addr=%h len=%0d id=%0d", $time, awaddr, awlen, awid);
+        if (wvalid && wready)
+            $display("%t [WR_BUILDER] WDATA=%h WLAST=%0b", $time, wdata, wlast);
+    end
+
 endmodule

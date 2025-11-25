@@ -31,6 +31,8 @@ $PROJECT_HOME/design/apb2axi_fifo.sv
 $PROJECT_HOME/design/builder/apb2axi_write_builder.sv
 $PROJECT_HOME/design/builder/apb2axi_read_builder.sv
 $PROJECT_HOME/design/apb2axi_txn_mgr.sv
+$PROJECT_HOME/design/apb2axi_response_collector.sv
+$PROJECT_HOME/design/apb2axi_response_handler.sv
 $PROJECT_HOME/design/apb2axi.sv
 
 # === Interfaces ===

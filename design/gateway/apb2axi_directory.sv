@@ -16,6 +16,10 @@ module apb2axi_directory #(
      input  logic [2:0]                 size,
      input  logic                       is_write,
 
+     input  logic                       cpl_valid,
+     input  logic [TAG_W_P-1:0]         cpl_tag,
+     input  logic                       cpl_error,
+
      output logic                       pending_valid,
      output directory_entry_t           pending_entry,
      output logic [TAG_W_P-1:0]         pending_tag,
@@ -57,6 +61,11 @@ module apb2axi_directory #(
                     dir_mem[dir_rd_ptr].state <= DIR_ST_ISSUED;
                     dir_rd_ptr                <= dir_rd_ptr + 1'b1;
                end
+
+               // Update directory entry according to the completion
+               if (cpl_valid) begin
+                    dir_mem[cpl_tag].state <= cpl_error ? DIR_ST_ERROR : DIR_ST_DONE;
+               end
           end
      end
 
@@ -71,8 +80,12 @@ module apb2axi_directory #(
      // synthesis translate_off
      always_ff @(posedge pclk)
           if (commit_pulse)
-               $display("%t [DIR] Enq TAG=%0d is_wr=%0b addr=%h len=%0d size=%0d",
-                         $time, dir_wr_ptr, is_write, addr, len, size);
+               $display("%t [DIR] Enq TAG=%0d is_wr=%0b addr=%h len=%0d size=%0d", $time, dir_wr_ptr, is_write, addr, len, size);
+     
+     always_ff @(posedge pclk) begin
+          if (pending_valid)
+               $display("%t [DIR] PENDING TAG=%0d state=%0d addr=%h", $time, pending_tag, dir_mem[pending_tag].state, dir_mem[pending_tag].addr);
+     end
      // synthesis translate_on
 
 endmodule

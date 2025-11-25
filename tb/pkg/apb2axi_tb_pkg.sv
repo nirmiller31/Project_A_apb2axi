@@ -2,6 +2,7 @@
 package apb2axi_tb_pkg;
 
      import uvm_pkg::*;
+     import apb2axi_pkg::*;
 
      int unsigned apb2axi_verbosity = UVM_DEBUG;
      
@@ -26,11 +27,6 @@ package apb2axi_tb_pkg;
      `include "tb/seq_item/axi_seq_item.sv"
      `include "tb/seq_item/virtual_seq_item.sv"
 
-     // ==========================================================
-     //  Sequences
-     // ==========================================================
-     `include "tb/seq/apb2axi_base_seq.sv"
-
      // ======================================================
      //  Agents
      // ======================================================
@@ -50,11 +46,18 @@ package apb2axi_tb_pkg;
      `include "tb/env/apb2axi_scoreboard.sv"
      `include "tb/env/apb2axi_env.sv"
 
+     // ==========================================================
+     //  Sequences
+     // ==========================================================
+     `include "tb/seq/apb2axi_base_seq.sv"
+     `include "tb/seq/apb2axi_bringup_seq.sv"
+
      // ======================================================
      //  Tests
      // ======================================================
      `include "tb/tests/apb2axi_base_test.sv"
      `include "tb/tests/sanity_bringup_test.sv"
+     `include "tb/tests/apb2axi_bringup_test.sv"
 
      // ======================================================
      //  Helper Functions

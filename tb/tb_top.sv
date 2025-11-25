@@ -121,7 +121,7 @@ module tb_top;
      initial begin
           uvm_config_db#(virtual apb_if)::set(null, "uvm_test_top.env", "vif", apb_vif);
           uvm_config_db#(virtual axi_if)::set(null, "uvm_test_top.env", "vif", axi_vif);
-          run_test("apb2axi_base_test");
+          run_test("apb2axi_bringup_test");
      end
 
      // initial begin

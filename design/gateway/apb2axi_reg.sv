@@ -60,8 +60,14 @@ module apb2axi_reg #(
           end
      end
 
+     always_ff @(posedge pclk) begin
+     if(addr_lo_we)
+          $display("%t [REG_DBG] AddrLo Write Enable asserted at paddr=%h pwdata=%h",
+                    $time, paddr, pwdata);
+     end
+
      // Single pulse after writing to addr_lo is commit signal
-     always_ff @(posedge pclk) begin                   
+     always_ff @(posedge pclk) begin               
           if (!presetn) begin
                addr_lo_we_d        <= '0;
                commit_pulse        <= '0;
@@ -70,6 +76,16 @@ module apb2axi_reg #(
                addr_lo_we_d                          <= addr_lo_we;
                commit_pulse                          <= addr_lo_we & ~addr_lo_we_d;
           end
+     end
+
+     always_ff @(posedge pclk) begin
+          if (commit_pulse) begin
+               $display("%t [REG] COMMIT addr=%h len=%0d size=%0d is_write=%0b", $time, addr, len, size, is_write);
+          end
+     end
+     always_ff @(posedge pclk) begin
+          if (addr_lo_we || addr_hi_we || cmd_we)
+               $display("%t [REGFILE] WRITE at addr=%h data=%h", $time, paddr, pwdata);
      end
 
 endmodule

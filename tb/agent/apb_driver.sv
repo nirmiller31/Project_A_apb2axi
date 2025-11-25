@@ -41,6 +41,8 @@ class apb_driver extends uvm_driver #(apb_seq_item);
     task drive_apb(apb_seq_item req);
 
         `uvm_info("APB_DRIVER", $sformatf("Driving APB transaction: addr=0x%0h write=%0b data=0x%0h", req.addr, req.write, req.data), apb2axi_verbosity)
+        @(posedge vif.PCLK);
+        wait (vif.PRESETn == 1'b1);
 
         vif.PSEL <= 1;
         vif.PADDR <= req.addr;
