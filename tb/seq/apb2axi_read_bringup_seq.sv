@@ -32,21 +32,18 @@ class apb2axi_read_bringup_seq extends apb2axi_base_seq;
 
         // Choose some non-zero aligned address
         base_addr    = 32'h0000_0010;   // word index = 4 (for 32-bit data)
-        expected_idx = base_addr >> 2;  // matches BFM: mem[idx][31:0] = idx
+        expected_idx = base_addr >> $clog2(AXI_DATA_W/8);  // matches BFM: mem[idx][31:0] = idx
 
         // 1) addr_hi = 0
         apb_write_reg(16'h0004, 32'h0000_0000);
 
         // 2) CMD = read, len=1, size=0   (same encoding as your first bringup)
-        //    You can later extend encoding for multi-beat.
         apb_write_reg(16'h0008, 32'h0000_0001);
 
         // 3) addr_lo = base_addr → commit_pulse
         apb_write_reg(16'h0000, base_addr);
 
-        if (m_env == null)
-            `uvm_fatal("READ_BRINGUP_SEQ",
-                       "m_env is NULL – test must set it before starting sequence")
+        if (m_env == null) `uvm_fatal("READ_BRINGUP_SEQ", "m_env is NULL – test must set it before starting sequence")
 
         // Give some time for AR + R to happen
         #200ns;
@@ -56,28 +53,19 @@ class apb2axi_read_bringup_seq extends apb2axi_base_seq;
 
         // ---------------- Checks ----------------
         if (axi_got.write) begin
-            `uvm_error("READ_BRINGUP_SEQ",
-                       $sformatf("Expected READ, got WRITE: %s",
-                                 axi_got.convert2string()))
+            `uvm_error("READ_BRINGUP_SEQ", $sformatf("Expected READ, got WRITE: %s", axi_got.convert2string()))
         end
 
         if (axi_got.addr[31:0] != base_addr) begin
-            `uvm_error("READ_BRINGUP_SEQ",
-                       $sformatf("Unexpected AXI addr. Got 0x%0h, expected 0x%0h",
-                                 axi_got.addr, 64'(base_addr)))
+            `uvm_error("READ_BRINGUP_SEQ", $sformatf("Unexpected AXI addr. Got 0x%0h, expected 0x%0h", axi_got.addr, 64'(base_addr)))
         end
 
         // BFM memory pattern: mem[idx][31:0] = idx
         if (axi_got.data[31:0] != expected_idx) begin
-            `uvm_error("READ_BRINGUP_SEQ",
-                       $sformatf("Unexpected read data. Got 0x%0h, expected 0x%0h",
-                                 axi_got.data[31:0], expected_idx))
+            `uvm_error("READ_BRINGUP_SEQ", $sformatf("Unexpected read data. Got 0x%0h, expected 0x%0h", axi_got.data[31:0], expected_idx))
         end
         else begin
-            `uvm_info("READ_BRINGUP_SEQ",
-                      $sformatf("READ OK: addr=0x%0h data=0x%0h (idx=%0d)",
-                                base_addr, axi_got.data[31:0], expected_idx),
-                      apb2axi_verbosity)
+            `uvm_info("READ_BRINGUP_SEQ", $sformatf("READ OK: addr=0x%0h data=0x%0h (idx=%0d)", base_addr, axi_got.data[31:0], expected_idx), apb2axi_verbosity)
         end
 
     endtask
