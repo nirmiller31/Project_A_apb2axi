@@ -240,6 +240,9 @@ module apb2axi #(
           // .bready       (BREADY)
      );
 
+     logic rready_builder;
+     assign RREADY = rready_builder;
+
      apb2axi_read_builder #(
           .AXI_ADDR_W   (AXI_ADDR_W),
           .AXI_DATA_W   (AXI_DATA_W),
@@ -250,7 +253,7 @@ module apb2axi #(
           .aresetn      (ARESETn),
 
           .rd_pop_valid (rd_pop_valid),
-          .rd_pop_ready (), //(rd_pop_ready),
+          .rd_pop_ready ('1), //(rd_pop_ready),
           .rd_pop_data  (rd_pop_data),
 
           .arid         (ARID),
@@ -269,7 +272,7 @@ module apb2axi #(
           .rresp        (RRESP),
           .rlast        (RLAST),
           .rvalid       (RVALID),
-          .rready       ()
+          .rready       (rready_builder)
      );
 
      // ============================================================
@@ -310,7 +313,7 @@ module apb2axi #(
      // Completion FIFO (CQ)
      // ============================================================
      apb2axi_fifo #(
-          .ENTRY_WIDTH (COMPLETION_W)
+          .WIDTH      (COMPLETION_W)
      ) u_cq_fifo (
           .clk        (ACLK),
           .resetn     (ARESETn),
@@ -340,10 +343,11 @@ module apb2axi #(
 
           // AXI R channel
           .rid                (RID),
+          .rdata              (RDATA),
           .rresp              (RRESP),
           .rlast              (RLAST),
           .rvalid             (RVALID),
-          .rready             (RREADY),   // top-level RREADY now comes from here
+          .rready             (rready_builder),   // top-level RREADY now comes from here
 
           .rdf_push_valid     (rdf_push_valid),
           .rdf_push_payload   (rdf_push_payload),
@@ -360,7 +364,7 @@ module apb2axi #(
           .COMPLETION_WP      (COMPLETION_W)
      ) u_resp_handler (
           .pclk               (PCLK),
-          .presetn            (ARESETn),
+          .presetn            (PRESETn),
 
           .cq_pop_valid       (cq_pop_valid),
           .cq_pop_ready       (cq_pop_ready),
@@ -371,7 +375,8 @@ module apb2axi #(
           .dir_cpl_error      (dir_cpl_error),
           .dir_cpl_resp       (dir_cpl_resp),
           .dir_cpl_num_beats  (dir_cpl_num_beats),
-          .dir_cpl_is_write   (dir_cpl_is_write)
+          .dir_cpl_is_write   (dir_cpl_is_write), 
+          .dir_cpl_ready      ('1)
      );
 
      // ============================================================
@@ -388,9 +393,8 @@ module apb2axi #(
      logic [AXI_DATA_W-1:0]    rdf_data_out;
      logic                     rdf_data_last;
 
-     // No APB consumer yet → never request data
-     assign rdf_data_req     = 1'b0;
-     assign rdf_data_req_tag = '0;
+     assign rdf_data_req     = dir_cpl_valid && !dir_cpl_is_write;
+     assign rdf_data_req_tag = dir_cpl_tag;
 
      apb2axi_rdf #(
           .RDF_W_P  (RDF_W),

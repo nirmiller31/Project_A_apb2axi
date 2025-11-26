@@ -1,0 +1,6 @@
+{"vcs1":{"timestamp_begin":1764093584.118618101, "rt":1.34, "ut":1.00, "st":0.05}}
+{"SNPS_VCS_INTERNAL_ROOT_START_TIME": 1764093583.898818971}
+{"VCS_COMP_START_TIME": 1764093583.898818971}
+{"VCS_COMP_END_TIME": 1764093585.518897718}
+{"VCS_USER_OPTIONS": "-full64 -sverilog -ntb_opts uvm-1.2 -f filelist.f -l comp.log"}
+{"vcs1": {"peak_mem": 358036}}

@@ -1,0 +1,2 @@
+setenv PROJECT_HOME /users/epnimo/Project
+cd $PROJECT_HOME

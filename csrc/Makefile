@@ -81,7 +81,7 @@ CFLAGS_O0+=$(STDLIB)
 LD_PARTIAL_LOADER=ld
 # Partial linking
 LD_PARTIAL=$(LD_PARTIAL_LOADER) -r -o
-LIBS=-lnuma -lvirsim -lerrorinf -lsnpsmalloc -lvfs 
+LIBS=-lvirsim -lerrorinf -lsnpsmalloc -lvfs 
 # Note: if make gives you errors about include, either get gmake, or
 # replace the following line with the contents of the file filelist,
 # EACH TIME IT CHANGES
@@ -104,6 +104,7 @@ clobber : clean
 picclean : 
 	rm -f _cuarc*.so _csrc*.so pre_vcsobj_*.so share_vcsobj_*.so
 	@rm -f $(PRODUCT).daidir/_[0-9]*_archive_*.so 2>/dev/null
+	@rm -f $(DPI_OBJS)
 
 product_clean_order : 
 	@$(MAKE) -f Makefile --no-print-directory picclean

@@ -1,0 +1,86 @@
+{
+    "_vcs_DPI_package": [
+        "_vcs_DPI_package",
+        "uM9F1",
+        "module",
+        1
+    ],
+    "vcs_paramclassrepository": [
+        "vcs_paramclassrepository",
+        "hEeZs",
+        "module",
+        2
+    ],
+    "_vcs_unit__861063480": [
+        "_vcs_unit__861063480",
+        "qFyMD",
+        "module",
+        3
+    ],
+    "std": [
+        "std",
+        "reYIK",
+        "module",
+        4
+    ],
+    "uvm_pkg": [
+        "uvm_pkg",
+        "zr7M1",
+        "module",
+        5
+    ],
+    "apb2axi_pkg": [
+        "apb2axi_pkg",
+        "jc5fT",
+        "module",
+        13
+    ],
+    "apb_if": [
+        "apb_if",
+        "d9vZk",
+        "module",
+        6
+    ],
+    "axi_if": [
+        "axi_if",
+        "xb4mh",
+        "module",
+        7
+    ],
+    "apb2axi_fifo": [
+        "apb2axi_fifo",
+        "YWy3x",
+        "module",
+        12
+    ],
+    "apb2axi_fifo_0000__port_gym": [
+        "apb2axi_fifo_0000__port_gym",
+        "v98bq",
+        "module",
+        14
+    ],
+    "apb2axi": [
+        "apb2axi",
+        "FCmqw",
+        "module",
+        8
+    ],
+    "apb2axi_tb_pkg": [
+        "apb2axi_tb_pkg",
+        "thZVc",
+        "module",
+        9
+    ],
+    "tb_top": [
+        "tb_top",
+        "jdPWL",
+        "module",
+        10
+    ],
+    "...MASTER...": [
+        "SIM",
+        "amcQw",
+        "module",
+        11
+    ]
+}
