@@ -5,13 +5,13 @@ class axi_driver extends uvm_driver #(axi_seq_item); // RSP defaults to REQ
 
      virtual axi_if vif;
 
-     function new(string name = "axi_driver", uvm_component parent=null);
+     function new(string name = "axi_drv", uvm_component parent=null);
           super.new(name, parent);
      endfunction
 
      function void build_phase(uvm_phase phase); 
           super.build_phase(phase);
-          if (!uvm_config_db#(virtual axi_if)::get(this, "", "vif", vif)) `uvm_fatal("AXI_DRIVER", "No virtual interface bound to axi_driver")
+          if (!uvm_config_db#(virtual axi_if)::get(this, "", "axi_vif", vif)) `uvm_fatal("AXI_DRIVER", "No virtual interface bound to axi_driver")
 
      endfunction
 

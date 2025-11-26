@@ -43,6 +43,7 @@ package apb2axi_tb_pkg;
      // ======================================================
      //  Enviorment
      // ======================================================
+     `include "tb/bfm/axi3_slave_bfm.sv"
      `include "tb/env/apb2axi_scoreboard.sv"
      `include "tb/env/apb2axi_env.sv"
 

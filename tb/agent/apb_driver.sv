@@ -4,14 +4,14 @@ class apb_driver extends uvm_driver #(apb_seq_item);
 
     virtual apb_if vif;
 
-    function new(string name = "apb_driver", uvm_component parent = null);
+    function new(string name = "apb_drv", uvm_component parent = null);
         super.new(name, parent);
     endfunction
 
     function void build_phase(uvm_phase phase);
 
         super.build_phase(phase);
-        if (!uvm_config_db#(virtual apb_if)::get(this, "", "vif", vif)) `uvm_fatal("APB_DRIVER", "No virtual interface bound to apb_driver")
+        if (!uvm_config_db#(virtual apb_if)::get(this, "", "apb_vif", vif)) `uvm_fatal("APB_DRIVER", "No virtual interface bound to apb_driver")
 
     endfunction
 

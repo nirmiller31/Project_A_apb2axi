@@ -38,6 +38,8 @@ class apb2axi_bringup_seq extends apb2axi_base_seq;
           if (m_env == null)
                `uvm_fatal("BRINGUP_SEQ", "m_env is NULL – test must set it")
 
+          #200ns;
+          
           // Block until AXI monitor reports one transaction
           m_env.axi_mon_fifo.get(axi_got);
 
@@ -47,7 +49,6 @@ class apb2axi_bringup_seq extends apb2axi_base_seq;
           else begin
                `uvm_info("BRINGUP_SEQ", $sformatf("Matched AXI READ at 0x%0h OK", axi_got.addr), apb2axi_verbosity)
           end
-          #200ns;
 
      endtask
 

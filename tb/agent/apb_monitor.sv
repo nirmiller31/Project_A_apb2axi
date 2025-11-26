@@ -16,7 +16,7 @@ class apb_monitor extends uvm_monitor;
      function void build_phase(uvm_phase phase);
           
           super.build_phase(phase);
-          if (!uvm_config_db#(virtual apb_if)::get(this, "", "vif", vif)) `uvm_fatal("APB_MONITOR", "No virtual interface bound to apb_monitor")
+          if (!uvm_config_db#(virtual apb_if)::get(this, "", "apb_vif", vif)) `uvm_fatal("APB_MONITOR", "No virtual interface bound to apb_monitor")
 
      endfunction
 

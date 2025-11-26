@@ -8,6 +8,7 @@ class apb2axi_env extends uvm_env;
 
      apb_agent                apb_ag;
      axi_agent                axi_ag;
+     axi3_slave_bfm           axi_bfm;
      apb2axi_scoreboard       sb;
 
      virtual apb_if apb_vif;
@@ -23,20 +24,22 @@ class apb2axi_env extends uvm_env;
           axi_mon_fifo = new("axi_mon_fifo", this);
 
           // Get interfaces
-          if (!uvm_config_db#(virtual apb_if)::get(this, "", "vif", apb_vif)) `uvm_fatal("ENV", "No apb_vif found in config_db")
-          if (!uvm_config_db#(virtual axi_if)::get(this, "", "vif", axi_vif)) `uvm_fatal("ENV", "No axi_vif found in config_db")
+          if (!uvm_config_db#(virtual apb_if)::get(this, "", "apb_vif", apb_vif)) `uvm_fatal("ENV", "No apb_vif found in config_db")
+          if (!uvm_config_db#(virtual axi_if)::get(this, "", "axi_vif", axi_vif)) `uvm_fatal("ENV", "No axi_vif found in config_db")
 
           // Ensure agent is active
           uvm_config_db#(uvm_active_passive_enum)::set(this, "apb_ag", "is_active", UVM_ACTIVE);
 
           // Create components
-          apb_ag = apb_agent::type_id::create("apb_ag", this);
-          axi_ag = axi_agent::type_id::create("axi_ag", this);
-          sb     = apb2axi_scoreboard::type_id::create("sb", this);
+          apb_ag    = apb_agent         ::type_id::create("apb_ag", this);
+          axi_ag    = axi_agent         ::type_id::create("axi_ag", this);
+          axi_bfm   = axi3_slave_bfm    ::type_id::create("axi_bfm", this);
+          sb        = apb2axi_scoreboard::type_id::create("sb", this);
 
           // Propagate virtual interfaces
-          uvm_config_db#(virtual apb_if)::set(this, "apb_ag", "vif", apb_vif);
-          uvm_config_db#(virtual axi_if)::set(this, "axi_ag", "vif", axi_vif);
+          uvm_config_db#(virtual apb_if)::set(this, "apb_ag",  "apb_vif", apb_vif);
+          uvm_config_db#(virtual axi_if)::set(this, "axi_ag",  "axi_vif", axi_vif);
+          uvm_config_db#(virtual axi_if)::set(this, "axi_bfm", "axi_vif", axi_vif);
 
           `uvm_info("ENV", "APB2AXI Environment built successfully.", apb2axi_verbosity)
 
