@@ -50,10 +50,10 @@ class apb2axi_env extends uvm_env;
           super.connect_phase(phase);
 
           // Connect monitors to scoreboard
-          apb_ag.mon.ap.connect(sb.apb_export);
-          axi_ag.mon.ap.connect(sb.axi_export);
+          apb_ag.apb_mon.ap.connect(sb.apb_export);
+          axi_ag.axi_mon.ap.connect(sb.axi_export);
 
-          axi_ag.mon.ap.connect(axi_mon_fifo.analysis_export);
+          axi_ag.axi_mon.ap.connect(axi_mon_fifo.analysis_export);
 
           `uvm_info("ENV", "Scoreboard connections established.", apb2axi_verbosity)
 

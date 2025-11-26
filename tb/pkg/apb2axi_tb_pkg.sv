@@ -52,6 +52,7 @@ package apb2axi_tb_pkg;
      // ==========================================================
      `include "tb/seq/apb2axi_base_seq.sv"
      `include "tb/seq/apb2axi_bringup_seq.sv"
+     `include "tb/seq/apb2axi_read_bringup_seq.sv"
 
      // ======================================================
      //  Tests

@@ -22,9 +22,9 @@ task run_phase(uvm_phase phase);
     
     apb2axi_base_seq main_seq;
 
-    `uvm_info("BASE_TEST", $sformatf("Sequencer handle in test = %s", env.apb_ag.seqr.get_full_name()), apb2axi_verbosity)
+    `uvm_info("BASE_TEST", $sformatf("Sequencer handle in test = %s", env.apb_ag.apb_seqr.get_full_name()), apb2axi_verbosity)
 
-    if (env.apb_ag.drv.seq_item_port != null)
+    if (env.apb_ag.apb_drv.seq_item_port != null)
         `uvm_info("BASE_TEST", "Driver seq_item_port handle is valid (UVM-1.2 safe check).", apb2axi_verbosity)
     else
         `uvm_error("BASE_TEST", "Driver seq_item_port handle is NULL!")
@@ -33,7 +33,7 @@ task run_phase(uvm_phase phase);
     `uvm_info("BASE_TEST", "Starting APB2AXI main sequence...", apb2axi_verbosity)
 
     main_seq = apb2axi_base_seq::type_id::create("main_seq");
-    main_seq.start(env.apb_ag.seqr);
+    main_seq.start(env.apb_ag.apb_seqr);
 
     `uvm_info("BASE_TEST", "Main sequence finished, dropping objection.", apb2axi_verbosity)
     phase.drop_objection(this);

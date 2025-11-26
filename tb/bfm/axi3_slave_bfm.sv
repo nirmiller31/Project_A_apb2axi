@@ -1,244 +1,216 @@
 //------------------------------------------------------------------------------
-// AXI3 Slave BFM (for apb2axi project)
-// - DUT is AXI3 master
-// - This BFM acts as a simple memory-mapped AXI3 slave
-//   * Supports bursts (INCR / FIXED)
-//   * Handles IDs
-//   * No write interleaving, no WID, no LOCKed sequences
+// AXI3 Slave BFM (Full Version)
+// Supports:
+//   * Multi-beat bursts (ARLEN/AWLEN)
+//   * SIZE-qualified beat size (2^SIZE bytes)
+//   * WSTRB byte-level writes
+//   * Backpressure-safe R and B channels
+//   * Non-interleaved mode (AXI3-compliant for single outstanding ID)
+//   * Real memory model
+//------------------------------------------------------------------------------
+// No interleaving yet, but architecture ready for ID-based extensions.
 //------------------------------------------------------------------------------
 
 import uvm_pkg::*;
 `include "uvm_macros.svh"
 import apb2axi_pkg::*;
 
+
 class axi3_slave_bfm extends uvm_component;
 
-     `uvm_component_utils(axi3_slave_bfm)
+    `uvm_component_utils(axi3_slave_bfm)
 
-     virtual axi_if vif;
+    virtual axi_if vif;
 
-     // Simple memory model: word-addressable
-     typedef logic [AXI_ADDR_W-1:0] addr_t;
-     typedef logic [AXI_DATA_W-1:0] data_t;
-     typedef logic [AXI_ID_W-1:0]   id_t;
+    // ------------------------------------------------------------
+    // Memory model (word-addressable)
+    // AXI_DATA_W-wide words, depth = configurable
+    // ------------------------------------------------------------
+    localparam int MEM_DEPTH = 4096;
+    typedef bit [AXI_DATA_W-1:0] data_word_t;
 
-     data_t mem[addr_t];   // associative array: addr -> data
+    data_word_t mem [0:MEM_DEPTH-1];
 
-     // Optional latency knobs (can be overridden via config_db)
-     int unsigned rd_latency_min        = 0;
-     int unsigned rd_latency_max        = 0;
-     int unsigned wr_resp_latency_min   = 0;
-     int unsigned wr_resp_latency_max   = 0;
+    // ------------------------------------------------------------
+    // Constructor
+    // ------------------------------------------------------------
+    function new(string name="axi3_slave_bfm", uvm_component parent=null);
+        super.new(name,parent);
+    endfunction
 
-     // Simple descriptor for AW/AR commands
-     typedef struct packed {
-          addr_t        addr;
-          logic [7:0]   len;    // AXI3: beats-1 (0..15); we keep 8 bits for simplicity
-          logic [2:0]   size;   // log2(bytes per beat)
-          logic [1:0]   burst;  // 01=INCR, 00=FIXED
-          id_t          id;
-     } axi_cmd_t;
+    // ------------------------------------------------------------
+    // Build
+    // ------------------------------------------------------------
+    function void build_phase(uvm_phase phase);
+        super.build_phase(phase);
+        if (!uvm_config_db#(virtual axi_if)::get(this,"","axi_vif",vif))
+            `uvm_fatal("AXI3_BFM","No virtual interface bound to BFM");
+    endfunction
 
-     // Queues for outstanding commands (responses return in acceptance order)
-     axi_cmd_t rd_q[$];
-     axi_cmd_t wr_q[$];
 
-     function new(string name = "axi3_slave_bfm", uvm_component parent=null);
-          super.new(name, parent);
-     endfunction
-
-     function void build_phase(uvm_phase phase);
-          super.build_phase(phase);
-
-          if (!uvm_config_db#(virtual axi_if)::get(this, "", "axi_vif", vif)) `uvm_fatal("AXI3_SLV", "No axi_vif found for axi3_slave_bfm")
-
-          // FIXME get latency knobs via config_db if you want later
-     endfunction
-
-     task run_phase(uvm_phase phase);
-          // Default slave outputs
-          vif.AWREADY <= 0;
-          vif.WREADY  <= 0;
-          vif.BVALID  <= 0;
-          vif.BRESP   <= 2'b00;
-          vif.BID     <= '0;
-
-          vif.ARREADY <= 0;
-          vif.RVALID  <= 0;
-          vif.RDATA   <= '0;
-          vif.RRESP   <= 2'b00;
-          vif.RLAST   <= 0;
-          vif.RID     <= '0;
-
-          // Wait for reset deassert
-          @(posedge vif.ACLK);
-          wait (vif.ARESETn);
-
-          // Run write and read channels in parallel
-          fork
-               handle_writes();
-               handle_reads();
-          join
-     endtask
-
-     //============================================================================
-     // WRITE CHANNELS: AW, W, B
-     //============================================================================
-     task handle_writes();
-          axi_cmd_t cur_aw;
-          bit       have_aw = 0;
-          int       beats_left;
-          addr_t    cur_addr;
-
-          vif.AWREADY <= 1;
-          vif.WREADY  <= 1;
-          vif.BVALID  <= 0;
-
-          forever @(posedge vif.ACLK) begin
-               if (!vif.ARESETn) begin
-                    have_aw    = 0;
-                    vif.AWREADY <= 1;
-                    vif.WREADY  <= 1;
-                    vif.BVALID  <= 0;
-               end
-               else begin
-                    // Accept a write address
-                    if (!have_aw && vif.AWVALID && vif.AWREADY) begin
-                         cur_aw.addr  = vif.AWADDR;
-                         cur_aw.len   = vif.AWLEN;
-                         cur_aw.size  = vif.AWSIZE;
-                         cur_aw.burst = vif.AWBURST;
-                         cur_aw.id    = vif.AWID;
-                         have_aw      = 1;
-                         beats_left   = cur_aw.len + 1;
-                         cur_addr     = cur_aw.addr;
-
-                         `uvm_info("AXI3_SLV",
-                                   $sformatf("AW: addr=0x%0h len=%0d size=%0d id=%0d",
-                                             cur_aw.addr, cur_aw.len, cur_aw.size, cur_aw.id),
-                                   UVM_MEDIUM)
-                    end
-
-                    // Consume W data once we have an AW
-                    if (have_aw && vif.WVALID && vif.WREADY) begin
-                         // Write into memory model; simple word-aligned model
-                         mem[cur_addr] = vif.WDATA;
-
-                         // Next address for INCR burst
-                         if (cur_aw.burst == 2'b01) begin // INCR
-                         int beat_bytes = 1 << cur_aw.size;
-                         cur_addr += beat_bytes;
-                         end
-
-                         beats_left--;
-
-                         // Last beat?
-                         if (vif.WLAST || (beats_left == 0)) begin
-                         have_aw = 0;
-                         send_bresp(cur_aw.id);
-                         end
-                    end
-               end
-          end
-     endtask
-
-    task send_bresp(id_t id);
-        int delay = (wr_resp_latency_max > wr_resp_latency_min)
-                    ? $urandom_range(wr_resp_latency_min, wr_resp_latency_max)
-                    : wr_resp_latency_min;
-
-        repeat (delay) @(posedge vif.ACLK);
-
-        vif.BID    <= id;
-        vif.BRESP  <= 2'b00; // OKAY
-        vif.BVALID <= 1'b1;
-
-        `uvm_info("AXI3_SLV",
-                  $sformatf("B: id=%0d resp=OKAY", id),
-                  UVM_MEDIUM)
-
-        // Wait for master to consume
-        do @(posedge vif.ACLK); while (!vif.BREADY);
-        vif.BVALID <= 0;
-    endtask
-
-    //============================================================================
-    // READ CHANNELS: AR, R
-    //============================================================================
-    task handle_reads();
-    
-        bit busy_read = 0;
-
-        vif.ARREADY <= 1;
-        vif.RVALID  <= 0;
-        vif.RLAST   <= 0;
-
-        forever @(posedge vif.ACLK) begin
-            if (!vif.ARESETn) begin
-                rd_q.delete();
-                busy_read  = 0;
-                vif.ARREADY <= 1;
-                vif.RVALID  <= 0;
-                vif.RLAST   <= 0;
-            end
-            else begin
-                // Accept AR
-                if (vif.ARVALID && vif.ARREADY) begin
-                    axi_cmd_t ar;
-
-                    ar.addr  = vif.ARADDR;
-                    ar.len   = vif.ARLEN;
-                    ar.size  = vif.ARSIZE;
-                    ar.burst = vif.ARBURST;
-                    ar.id    = vif.ARID;
-
-                    rd_q.push_back(ar);
-
-                    `uvm_info("AXI3_SLV",
-                              $sformatf("AR: addr=0x%0h len=%0d size=%0d id=%0d",
-                                        ar.addr, ar.len, ar.size, ar.id),
-                              UVM_MEDIUM)
-                end
-
-                // Serve one burst at a time, in acceptance order
-                if (!busy_read && rd_q.size() > 0) begin
-                    busy_read = 1;
-                    drive_read_burst(rd_q.pop_front(), busy_read);
-                end
-            end
+    // ------------------------------------------------------------
+    // Initialize memory with deterministic pattern
+    // ------------------------------------------------------------
+    task automatic init_mem();
+        for (int i=0; i<MEM_DEPTH; i++) begin
+            mem[i]       = '0;
+            mem[i][31:0] = i;  // simple deterministic pattern
         end
     endtask
 
-    task drive_read_burst(axi_cmd_t ar, output bit busy_read);
-        int beat_bytes = 1 << ar.size;
-        addr_t addr    = ar.addr;
-        int beats      = ar.len + 1;
 
-        int delay = (rd_latency_max > rd_latency_min)
-                    ? $urandom_range(rd_latency_min, rd_latency_max)
-                    : rd_latency_min;
-        repeat (delay) @(posedge vif.ACLK);
+    // ------------------------------------------------------------
+    // Main BFM process
+    // ------------------------------------------------------------
+    task run_phase(uvm_phase phase);
+        phase.raise_objection(this);
+
+        init_mem();
+
+        // Initialize interface outputs
+        vif.ARREADY <= 0;
+        vif.AWREADY <= 0;
+        vif.WREADY  <= 0;
+        vif.RVALID  <= 0;
+        vif.RLAST   <= 0;
+        vif.RRESP   <= 0;
+        vif.BVALID  <= 0;
+        vif.BRESP   <= 0;
+
+        wait (vif.ARESETn === 1'b1);
+        @(posedge vif.ACLK);
+
+        `uvm_info("AXI3_BFM","BFM is alive and ready",UVM_LOW)
+
+        forever begin
+            @(posedge vif.ACLK);
+
+            // Always ready for address
+            vif.ARREADY <= 1;
+            vif.AWREADY <= 1;
+
+            // Always ready for write data
+            vif.WREADY  <= 1;
+
+            // ========= READ ADDRESS =========
+            if (vif.ARVALID && vif.ARREADY) begin
+                fork
+                    automatic logic [AXI_ADDR_W-1:0] araddr = vif.ARADDR;
+                    automatic logic [3:0]           arlen  = vif.ARLEN;
+                    automatic logic [2:0]           arsize = vif.ARSIZE;
+                    automatic logic [AXI_ID_W-1:0]  arid   = vif.ARID;
+                    begin
+                        do_read(araddr, arlen, arsize, arid);
+                    end
+                join_none
+            end
+
+            // ========= WRITE ADDRESS =========
+            if (vif.AWVALID && vif.AWREADY) begin
+                fork
+                    automatic logic [AXI_ADDR_W-1:0] awaddr = vif.AWADDR;
+                    automatic logic [3:0]           awlen  = vif.AWLEN;
+                    automatic logic [2:0]           awsize = vif.AWSIZE;
+                    automatic logic [AXI_ID_W-1:0]  awid   = vif.AWID;
+                    begin
+                        do_write(awaddr, awlen, awsize, awid);
+                    end
+                join_none
+            end
+        end
+
+        phase.drop_objection(this);
+    endtask
+
+
+    // ------------------------------------------------------------
+    // READ handler (multi-beat)
+    // ------------------------------------------------------------
+    task automatic do_read(
+        logic [AXI_ADDR_W-1:0] araddr,
+        logic [3:0]            arlen,
+        logic [2:0]            arsize,
+        logic [AXI_ID_W-1:0]   arid
+    );
+        int beats = arlen + 1;
+        int bytes_per_beat = 1 << arsize;
+        int base_word = araddr >> $clog2(AXI_DATA_W/8);
+
+        `uvm_info("AXI3_BFM",
+            $sformatf("READ: addr=0x%0h beats=%0d size=%0d id=%0d",
+                      araddr, beats, bytes_per_beat, arid),
+            UVM_MEDIUM)
 
         for (int i = 0; i < beats; i++) begin
-            data_t rdata = mem.exists(addr) ? mem[addr] : '0;
+            int idx = (base_word + i) % MEM_DEPTH;
 
-            vif.RID    <= ar.id;
-            vif.RDATA  <= rdata;
-            vif.RRESP  <= 2'b00;          // OKAY
+            @(posedge vif.ACLK);
+            vif.RID    <= arid;
+            vif.RDATA  <= mem[idx];
+            vif.RRESP  <= 2'b00;
             vif.RLAST  <= (i == beats-1);
             vif.RVALID <= 1'b1;
 
-            // Wait for master to accept this beat
-            do @(posedge vif.ACLK); while (!vif.RREADY);
+            // Backpressure-safe wait
+            do @(posedge vif.ACLK);
+            while (!vif.RREADY && vif.ARESETn);
 
-            vif.RVALID <= 0;
-            vif.RLAST  <= 0;
-
-            if (ar.burst == 2'b01) // INCR
-                addr += beat_bytes;
+            vif.RVALID <= 1'b0;
         end
 
-        busy_read = 0;
+        vif.RLAST <= 0;
+    endtask
+
+
+    // ------------------------------------------------------------
+    // WRITE handler (multi-beat) + WSTRB support
+    // ------------------------------------------------------------
+    task automatic do_write(
+          logic [AXI_ADDR_W-1:0] awaddr,
+          logic [3:0]            awlen,
+          logic [2:0]            awsize,
+          logic [AXI_ID_W-1:0]   awid
+    );
+          int beats = awlen + 1;
+          int base_word = awaddr >> $clog2(AXI_DATA_W/8);
+          int idx; 
+
+          `uvm_info("AXI3_BFM",
+               $sformatf("WRITE: addr=0x%0h beats=%0d size=%0d id=%0d",
+                         awaddr, beats, awsize, awid),
+               UVM_MEDIUM)
+
+          for (int i = 0; i < beats; i++) begin
+               // Wait for W beat
+               do @(posedge vif.ACLK);
+               while (!vif.WVALID && vif.ARESETn);
+
+               idx = (base_word + i) % MEM_DEPTH;
+
+               // ---------- BYTE-WISE write using WSTRB ----------
+               for (int b = 0; b < (AXI_DATA_W/8); b++) begin
+                    if (vif.WSTRB[b])
+                         mem[idx][8*b +: 8] = vif.WDATA[8*b +: 8];
+               end
+
+               // Check WLAST correctness
+               if ((i == beats-1) && !vif.WLAST)
+                    `uvm_error("AXI3_BFM","WLAST missing in final beat")
+               if ((i != beats-1) && vif.WLAST)
+                    `uvm_error("AXI3_BFM","WLAST asserted too early")
+          end
+
+          // Send BRESP after all beats
+          @(posedge vif.ACLK);
+          vif.BID    <= awid;
+          vif.BRESP  <= 2'b00;
+          vif.BVALID <= 1;
+
+          // Wait for BREADY
+          do @(posedge vif.ACLK);
+          while (!vif.BREADY && vif.ARESETn);
+
+          vif.BVALID <= 0;
     endtask
 
 endclass

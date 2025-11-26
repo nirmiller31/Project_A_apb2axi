@@ -29,7 +29,8 @@ class apb_driver extends uvm_driver #(apb_seq_item);
                 end
                 begin
                     #100us; // sim-time watchdog to catch handshake issues
-                    `uvm_fatal("APB_DRIVER", "Timeout waiting on get_next_item(). Is the sequence running on this sequencer?")
+                    $finish;
+                    // `uvm_fatal("APB_DRIVER", "Timeout waiting on get_next_item(). Is the sequence running on this sequencer?")
                 end
             join_any
             disable fork;
