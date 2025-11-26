@@ -27,7 +27,14 @@ module apb2axi_gateway #(
      output logic                  dir_pending_valid,
      output directory_entry_t      dir_pending_entry,
      output logic [TAG_W-1:0]      dir_pending_tag,
-     input  logic                  dir_pending_pop
+     input  logic                  dir_pending_pop,
+
+     input  logic                  dir_cpl_valid,
+     input  logic [TAG_W-1:0]      dir_cpl_tag,
+     input  logic                  dir_cpl_is_write,
+     input  logic                  dir_cpl_error,
+     input  logic [1:0]            dir_cpl_resp,
+     input  logic [7:0]            dir_cpl_num_beats
 );
 
      // ---------------- Internal wiring ----------------
@@ -67,15 +74,24 @@ module apb2axi_gateway #(
      apb2axi_directory u_apb2axi_directory (
           .pclk         (PCLK),
           .presetn      (PRESETn),
+
           .commit_pulse (commit_pulse),
           .addr         (addr),
           .len          (len),
           .size         (size),
           .is_write     (is_write),
+
           .pending_valid(dir_pending_valid),
           .pending_entry(dir_pending_entry),
           .pending_tag  (dir_pending_tag),
-          .pending_pop  (dir_pending_pop)
+          .pending_pop  (dir_pending_pop),
+
+          .cpl_valid     (dir_cpl_valid),
+          .cpl_tag       (dir_cpl_tag),
+          .cpl_is_write  (dir_cpl_is_write),
+          .cpl_error     (dir_cpl_error),
+          .cpl_resp      (dir_cpl_resp),
+          .cpl_num_beats (dir_cpl_num_beats)          
      );
 
 endmodule

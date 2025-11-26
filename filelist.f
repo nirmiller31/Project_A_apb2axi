@@ -30,9 +30,10 @@ $PROJECT_HOME/design/gateway/apb2axi_gateway.sv
 $PROJECT_HOME/design/apb2axi_fifo.sv
 $PROJECT_HOME/design/builder/apb2axi_write_builder.sv
 $PROJECT_HOME/design/builder/apb2axi_read_builder.sv
+$PROJECT_HOME/design/response/apb2axi_response_collector.sv
+$PROJECT_HOME/design/response/apb2axi_response_handler.sv
+$PROJECT_HOME/design/response/apb2axi_rdf.sv
 $PROJECT_HOME/design/apb2axi_txn_mgr.sv
-$PROJECT_HOME/design/apb2axi_response_collector.sv
-$PROJECT_HOME/design/apb2axi_response_handler.sv
 $PROJECT_HOME/design/apb2axi.sv
 
 # === Interfaces ===

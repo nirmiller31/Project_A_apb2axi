@@ -91,6 +91,13 @@ module apb2axi #(
      logic [TAG_W-1:0]      dir_pending_tag;
      logic                  dir_pending_pop;
 
+     logic             dir_cpl_valid;
+     logic [TAG_W-1:0] dir_cpl_tag;
+     logic             dir_cpl_is_write;
+     logic             dir_cpl_error;
+     logic [1:0]       dir_cpl_resp;
+     logic [7:0]       dir_cpl_num_beats;
+
      // ============================================================
      // Instantiate Gateway (APB side = reg + directory)
      // ============================================================
@@ -111,7 +118,14 @@ module apb2axi #(
           .dir_pending_valid (dir_pending_valid),
           .dir_pending_entry (dir_pending_entry),
           .dir_pending_tag   (dir_pending_tag),
-          .dir_pending_pop   (dir_pending_pop)
+          .dir_pending_pop   (dir_pending_pop),
+
+          .dir_cpl_valid     (dir_cpl_valid),
+          .dir_cpl_tag       (dir_cpl_tag),
+          .dir_cpl_is_write  (dir_cpl_is_write),
+          .dir_cpl_error     (dir_cpl_error),
+          .dir_cpl_resp      (dir_cpl_resp),
+          .dir_cpl_num_beats (dir_cpl_num_beats)
      );
 
      // ============================================================
@@ -325,33 +339,80 @@ module apb2axi #(
           .bready        (BREADY),   // top-level BREADY now comes from here
 
           // AXI R channel
-          .rid           (RID),
-          .rresp         (RRESP),
-          .rlast         (RLAST),
-          .rvalid        (RVALID),
-          .rready        (RREADY),   // top-level RREADY now comes from here
+          .rid                (RID),
+          .rresp              (RRESP),
+          .rlast              (RLAST),
+          .rvalid             (RVALID),
+          .rready             (RREADY),   // top-level RREADY now comes from here
+
+          .rdf_push_valid     (rdf_push_valid),
+          .rdf_push_payload   (rdf_push_payload),
+          .rdf_push_ready     (rdf_push_ready),
 
           // CQ write side
-          .cq_push_valid (cq_push_valid),
-          .cq_push_ready (cq_push_ready),
-          .cq_push_data  (cq_push_data)
+          .cpl_push_valid     (cq_push_valid),
+          .cpl_push_ready     (cq_push_ready),
+          .cpl_push_data      (cq_push_data)
      );
 
      apb2axi_response_handler #(
-          .TAG_W_P       (TAG_W),
-          .COMPLETION_WP (COMPLETION_W)
+          .TAG_W_P            (TAG_W),
+          .COMPLETION_WP      (COMPLETION_W)
      ) u_resp_handler (
-          .pclk          (ACLK),         // temporary: same clock as collector
-          .presetn       (ARESETn),
+          .pclk               (PCLK),
+          .presetn            (ARESETn),
 
-          .cq_pop_valid  (cq_pop_valid),
-          .cq_pop_ready  (cq_pop_ready),
-          .cq_pop_data   (cq_pop_data),
+          .cq_pop_valid       (cq_pop_valid),
+          .cq_pop_ready       (cq_pop_ready),
+          .cq_pop_data        (cq_pop_data),
 
-          // Directory hook-up will come later
-          .dir_cpl_valid (),
-          .dir_cpl_tag   (),
-          .dir_cpl_error ()
+          .dir_cpl_valid      (dir_cpl_valid),
+          .dir_cpl_tag        (dir_cpl_tag),
+          .dir_cpl_error      (dir_cpl_error),
+          .dir_cpl_resp       (dir_cpl_resp),
+          .dir_cpl_num_beats  (dir_cpl_num_beats),
+          .dir_cpl_is_write   (dir_cpl_is_write)
+     );
+
+     // ============================================================
+     // RDF (Read Data FIFO) wiring
+     // ============================================================
+     logic        rdf_push_valid;
+     rdf_entry_t  rdf_push_payload;
+     logic        rdf_push_ready;
+
+     // APB-side consumer (we’ll just park it for now)
+     logic                     rdf_data_req;
+     logic [TAG_W-1:0]         rdf_data_req_tag;
+     logic                     rdf_data_valid;
+     logic [AXI_DATA_W-1:0]    rdf_data_out;
+     logic                     rdf_data_last;
+
+     // No APB consumer yet → never request data
+     assign rdf_data_req     = 1'b0;
+     assign rdf_data_req_tag = '0;
+
+     apb2axi_rdf #(
+          .RDF_W_P  (RDF_W),
+          .TAG_W_P  (TAG_W),
+          .DATA_W_P (AXI_DATA_W)
+     ) u_rdf (
+          // AXI/ACLK side
+          .ACLK           (ACLK),
+          .ARESETn        (ARESETn),
+          .rdf_push_valid (rdf_push_valid),
+          .rdf_push_payload(rdf_push_payload),
+          .rdf_push_ready (rdf_push_ready),
+
+          // APB/PCLK side
+          .PCLK           (PCLK),
+          .PRESETn        (PRESETn),
+
+          .data_req       (rdf_data_req),
+          .data_req_tag   (rdf_data_req_tag),
+          .data_valid     (rdf_data_valid),
+          .data_out       (rdf_data_out),
+          .data_last      (rdf_data_last)
      );
 
 

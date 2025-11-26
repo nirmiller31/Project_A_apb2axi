@@ -16,14 +16,17 @@ module apb2axi_directory #(
      input  logic [2:0]                 size,
      input  logic                       is_write,
 
-     input  logic                       cpl_valid,
-     input  logic [TAG_W_P-1:0]         cpl_tag,
-     input  logic                       cpl_error,
-
      output logic                       pending_valid,
      output directory_entry_t           pending_entry,
      output logic [TAG_W_P-1:0]         pending_tag,
-     input  logic                       pending_pop
+     input  logic                       pending_pop,
+
+     input  logic                       cpl_valid,
+     input  logic [TAG_W_P-1:0]         cpl_tag,
+     input  logic                       cpl_is_write,
+     input  logic                       cpl_error,
+     input  logic [1:0]                 cpl_resp,
+     input  logic [7:0]                 cpl_num_beats
 );
      // Directory entry array
      directory_entry_t                  dir_mem [TAG_NUM_P];
@@ -86,6 +89,11 @@ module apb2axi_directory #(
           if (pending_valid)
                $display("%t [DIR] PENDING TAG=%0d state=%0d addr=%h", $time, pending_tag, dir_mem[pending_tag].state, dir_mem[pending_tag].addr);
      end
+
+     always_ff @(posedge pclk)
+          if (cpl_valid)
+               $display("%t [DIR] COMPLETE TAG=%0d is_wr=%0b err=%0b beats=%0d resp=%0d", $time, cpl_tag, cpl_is_write, cpl_error, cpl_num_beats, cpl_resp);
+
      // synthesis translate_on
 
 endmodule

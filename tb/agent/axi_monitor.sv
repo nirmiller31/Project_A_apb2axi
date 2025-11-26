@@ -25,8 +25,7 @@ class axi_monitor extends uvm_monitor;
           wait (vif.ARESETn === 1'b1);
           @(posedge vif.ACLK);
 
-          // forever begin
-          while (phase.get_objection_count() > 0) begin
+          forever begin
                @(posedge vif.ACLK);
                // --- Detect Write Address handshake ---
                if (vif.AWVALID && vif.AWREADY) begin
