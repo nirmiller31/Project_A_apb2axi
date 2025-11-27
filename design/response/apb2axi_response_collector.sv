@@ -52,85 +52,90 @@ module apb2axi_response_collector #(
     // Internal bookkeeping for a single in-flight read burst
     completion_entry_t cpl_reg;
 
-    logic              r_inflight;
-    logic [TAG_W-1:0]  cur_rid;
-    logic [7:0]        beat_cnt;
-    logic              r_error;
-    logic [1:0]        last_rresp;
+    logic              reads_inflight   [N_TAG];
+    logic [TAG_W-1:0]  cur_rid          [N_TAG];
+    logic [7:0]        beat_cnt         [N_TAG];
+    logic              r_error          [N_TAG];
+    logic [1:0]        last_rresp       [N_TAG];
+
+    int                read_idx;
 
     // Sequential logic
-    always_ff @(posedge aclk or negedge aresetn) begin
+    always_ff @(posedge aclk) begin
         if (!aresetn) begin
-            rdf_push_valid <= 1'b0;
-            rdf_push_payload <= '0;
+            rdf_push_valid          <= 1'b0;
+            rdf_push_payload        <= '0;
 
-            cpl_push_valid <= 1'b0;
-            cpl_push_data  <= '0;
+            cpl_push_valid          <= 1'b0;
+            cpl_push_data           <= '0;
 
-            r_inflight  <= 1'b0;
-            cur_rid     <= '0;
-            beat_cnt    <= '0;
-            r_error     <= 1'b0;
-            last_rresp  <= 2'b00;
+            for(int i = 0 ; i < N_TAG ; i++) begin
+                reads_inflight[i]  <= 1'b0;
+                beat_cnt[i]        <= '0;
+                r_error[i]         <= 1'b0;
+                last_rresp[i]      <= 2'b00;
+            end
         end
         else begin
             // default: no pushes unless we see activity
-            rdf_push_valid <= 1'b0;
-            cpl_push_valid <= 1'b0;
+            rdf_push_valid          <= 1'b0;
+            if(cpl_push_valid & cpl_push_ready) begin
+                cpl_push_valid      <= 1'b0;
+            end
 
             // -----------------------------
             // READ DATA beat arrives
             // -----------------------------
             if (rvalid && rready) begin
-                rdf_entry_t beat;
+                read_idx            = rid;
 
-                // Start of burst
-                if (!r_inflight) begin
-                    r_inflight <= 1'b1;
-                    cur_rid    <= rid;
-                    beat_cnt   <= '0;
-                    r_error    <= 1'b0;
+                if(rdf_push_ready) begin
+                    rdf_entry_t     beat;
+                    // Prepare RDF entry
+                    beat.tag   = rid;
+                    beat.data  = rdata;
+                    beat.last  = rlast;
+                    beat.resp  = rresp;
+
+                    rdf_push_payload <= beat;
+                    rdf_push_valid   <= 1'b1;
                 end
 
-                beat_cnt   <= beat_cnt + 1;
-                last_rresp <= rresp;
-                if (rresp != 2'b00)
-                    r_error <= 1'b1;
+                if (!reads_inflight[read_idx]) begin  // Start of burst for this TAG
+                    reads_inflight[read_idx]    <= 1'b1;
+                    beat_cnt[read_idx]          <= 8'd0;
+                    r_error[read_idx]           <= 1'b0;
+                end
+                else begin
+                    beat_cnt[read_idx]          <= beat_cnt[read_idx] + 1;
+                end
 
-                // Prepare RDF entry
-                beat.tag   = rid;
-                beat.data  = rdata;
-                beat.last  = rlast;
-                beat.resp  = rresp;
+                last_rresp[read_idx]            <= rresp;
+                if (rresp[read_idx] != 2'b00)   r_error[read_idx] <= 1'b1;
 
-                // For now we assume rdf_push_ready is always 1 (single-beat FIFO, pop side always ready)
-                rdf_push_payload <= beat;
-                rdf_push_valid   <= 1'b1;
-
-                // Debug (optional)
+                // Debug
                 // synthesis translate_off
-                $display("%t [RESP_COLLECT] RBEAT: RID=%0d RRESP=%0d RLAST=%0b",
-                         $time, rid, rresp, rlast);
+                $display("%t [RESP_COLLECT] RBEAT: RID=%0d RRESP=%0d RLAST=%0b", $time, rid, rresp, rlast);
                 // synthesis translate_on
 
                 // End of burst: emit completion
                 if (rlast) begin
                     cpl_reg.is_write  = 1'b0;
-                    cpl_reg.tag       = cur_rid;
-                    cpl_reg.resp      = last_rresp;
-                    cpl_reg.error     = r_error;
-                    cpl_reg.num_beats = beat_cnt + 1; // include this beat
+                    cpl_reg.tag       = rid;
+                    cpl_reg.resp      = last_rresp[read_idx];
+                    cpl_reg.error     = r_error[read_idx];
+                    cpl_reg.num_beats = beat_cnt[read_idx] + 1; // include this beat
 
-                    cpl_push_data  <= cpl_reg;
-                    cpl_push_valid <= 1'b1;
+                    reads_inflight[read_idx]    <= 1'b0;
 
-                    // Debug (matches your earlier logs)
-                    // synthesis translate_off
-                    $display("%t [RESP_COLLECT] READ done: RID=%0d RRESP=%0d beats=%0d",
-                             $time, cur_rid, last_rresp, beat_cnt+1);
-                    // synthesis translate_on
-
-                    r_inflight <= 1'b0;
+                    if(!cpl_push_valid)begin
+                        cpl_push_data  <= cpl_reg;
+                        cpl_push_valid <= 1'b1;
+                        // Debug
+                        // synthesis translate_off
+                        $display("%t [RESP_COLLECT] READ done: RID=%0d RRESP=%0d beats=%0d", $time, read_idx, last_rresp[read_idx], beat_cnt[read_idx]+1);
+                        // synthesis translate_on
+                    end
                 end
             end
 

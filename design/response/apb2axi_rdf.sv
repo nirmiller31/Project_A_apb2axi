@@ -66,9 +66,12 @@ module apb2axi_rdf #(
           .pop_data   (pop_data_flat)
      );
 
-     // Simple consumer: ignore data_req_tag in phase 1,
-     // just pop in order when data_req is asserted.
-     always_ff @(posedge PCLK) begin
+     // -----------------------------------------------------------------
+     // APB-side consumer
+     // Phase 1: pop only when TAG matches data_req_tag.
+     // This keeps it structurally ready for future multi-ID/interleave.
+     // -----------------------------------------------------------------
+     always_ff @(posedge PCLK or negedge PRESETn) begin
           if (!PRESETn) begin
                data_valid <= 1'b0;
                data_out   <= '0;
@@ -76,15 +79,20 @@ module apb2axi_rdf #(
                pop_ready  <= 1'b0;
           end
           else begin
+               // default: de-assert for one-cycle pulses
                data_valid <= 1'b0;
                pop_ready  <= 1'b0;
 
                if (data_req && pop_valid) begin
-                    data_out   <= pop_payload.data;
-                    data_last  <= pop_payload.last;
-                    data_valid <= 1'b1;
-                    pop_ready  <= 1'b1;
-                    // FIXME interleave handling: check pop_payload.tag == data_req_tag
+                    // Outstanding-ready hook: ensure TAG matches.
+                    if (pop_payload.tag == data_req_tag) begin
+                         data_out   <= pop_payload.data;
+                         data_last  <= pop_payload.last;
+                         data_valid <= 1'b1;
+                         pop_ready  <= 1'b1;
+                    end
+                    // else: tag mismatch → do not pop, leave entry for later.
+                    // Later you can add debug or per-TAG FIFOs here.
                end
           end
      end

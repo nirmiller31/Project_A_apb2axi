@@ -38,7 +38,7 @@ class apb2axi_read_bringup_seq extends apb2axi_base_seq;
         apb_write_reg(16'h0004, 32'h0000_0000);
 
         // 2) CMD = read, len=1, size=0   (same encoding as your first bringup)
-        apb_write_reg(16'h0008, 32'h0000_0001);
+        apb_write_reg(16'h000f, 32'h0000_0001);
 
         // 3) addr_lo = base_addr → commit_pulse
         apb_write_reg(16'h0000, base_addr);

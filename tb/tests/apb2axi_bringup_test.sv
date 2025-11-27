@@ -14,9 +14,10 @@ class apb2axi_bringup_test extends apb2axi_base_test;
      endfunction
 
      task run_phase(uvm_phase phase);
-          string seq_sel;
-          apb2axi_bringup_seq       bringup_seq;
-          apb2axi_read_bringup_seq  rd_bringup_seq;
+          string                             seq_sel;
+          apb2axi_bringup_seq                bringup_seq;
+          apb2axi_read_bringup_seq           rd_bringup_seq;
+          apb2axi_multiple_beat_read_seq     mb_rd_bringup_seq;
 
           phase.raise_objection(this);
 
@@ -30,6 +31,12 @@ class apb2axi_bringup_test extends apb2axi_base_test;
                rd_bringup_seq         = apb2axi_read_bringup_seq::type_id::create("rd_seq");
                rd_bringup_seq.m_env   = env;
                rd_bringup_seq.start(env.apb_ag.apb_seqr);
+          end
+          else if (seq_sel.tolower() == "mulread") begin
+               `uvm_info("BRINGUP_TEST", "Running MULTIPLE BEAT READ bringup sequence", apb2axi_verbosity)
+               mb_rd_bringup_seq         = apb2axi_multiple_beat_read_seq::type_id::create("rd_seq");
+               mb_rd_bringup_seq.m_env   = env;
+               mb_rd_bringup_seq.start(env.apb_ag.apb_seqr);
           end
           else begin
                `uvm_info("BRINGUP_TEST", "Running (original) bringup sequence", apb2axi_verbosity)
