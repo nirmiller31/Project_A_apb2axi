@@ -107,6 +107,10 @@ module tb_top;
 
      //      run_test("apb2axi_base_test");
      // end
+     initial begin
+          $fsdbDumpfile("waves.fsdb");
+          $fsdbDumpvars(0, tb_top);
+     end
 
      initial begin
           #1ns;

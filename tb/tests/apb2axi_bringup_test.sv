@@ -18,6 +18,7 @@ class apb2axi_bringup_test extends apb2axi_base_test;
           apb2axi_bringup_seq                bringup_seq;
           apb2axi_read_bringup_seq           rd_bringup_seq;
           apb2axi_multiple_beat_read_seq     mb_rd_bringup_seq;
+          apb2axi_read_drain_seq             rd_drain_bringup_seq;
 
           phase.raise_objection(this);
 
@@ -37,6 +38,12 @@ class apb2axi_bringup_test extends apb2axi_base_test;
                mb_rd_bringup_seq         = apb2axi_multiple_beat_read_seq::type_id::create("rd_seq");
                mb_rd_bringup_seq.m_env   = env;
                mb_rd_bringup_seq.start(env.apb_ag.apb_seqr);
+          end
+          else if (seq_sel.tolower() == "readdrain") begin
+               `uvm_info("BRINGUP_TEST", "Running READ DRAIN bringup sequence", apb2axi_verbosity)
+               rd_drain_bringup_seq         = apb2axi_read_drain_seq::type_id::create("rd_seq");
+               rd_drain_bringup_seq.m_env   = env;
+               rd_drain_bringup_seq.start(env.apb_ag.apb_seqr);
           end
           else begin
                `uvm_info("BRINGUP_TEST", "Running (original) bringup sequence", apb2axi_verbosity)

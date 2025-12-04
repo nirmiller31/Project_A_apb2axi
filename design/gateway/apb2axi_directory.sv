@@ -9,91 +9,144 @@ module apb2axi_directory #(
      input  logic                       pclk,
      input  logic                       presetn,
 
-     // From reg file (each APB commit)
-     input  logic                       commit_pulse,
-     input  logic [AXI_ADDR_W-1:0]      addr,
-     input  logic [7:0]                 len,
-     input  logic [2:0]                 size,
-     input  logic                       is_write,
+     input  logic                       alloc_valid,       // new descriptor available
+     input  directory_entry_t           alloc_entry,       // descriptor
+     output logic                       alloc_ready,       // can accept?
+     output logic [TAG_W_P-1:0]         alloc_tag,         // assigned TAG
+     // txn_mgr signals
+     output logic                       dir_pop_valid,
+     output directory_entry_t           dir_pop_entry,
+     output logic [TAG_W_P-1:0]         dir_pop_tag,
+     input  logic                       dir_pop_ready,
 
-     output logic                       pending_valid,
-     output directory_entry_t           pending_entry,
-     output logic [TAG_W_P-1:0]         pending_tag,
-     input  logic                       pending_pop,
+     input  logic                       dir_cpl_valid,
+     input  logic [TAG_W_P-1:0]         dir_cpl_tag,
+     input  logic                       dir_cpl_is_write,
+     input  logic                       dir_cpl_error,
+     input  logic [1:0]                 dir_cpl_resp,
+     input  logic [7:0]                 dir_cpl_num_beats,
+     output logic                       dir_cpl_ready,
 
-     input  logic                       cpl_valid,
-     input  logic [TAG_W_P-1:0]         cpl_tag,
-     input  logic                       cpl_is_write,
-     input  logic                       cpl_error,
-     input  logic [1:0]                 cpl_resp,
-     input  logic [7:0]                 cpl_num_beats
+     input  logic                       dir_consumed_valid, // APB says: done with this TAG
+     input  logic [TAG_W_P-1:0]         dir_consumed_tag
 );
-     // Directory entry array
-     directory_entry_t                  dir_mem [TAG_NUM_P];
-     logic [TAG_W_P-1:0]                dir_wr_ptr;   // simple incrementing tag pointer, FIXME- make it complex
-     logic [TAG_W_P-1:0]                dir_rd_ptr;
 
-     always_ff @(posedge pclk or negedge presetn) begin
+     // =============================================================
+     // Entry state machine
+     // =============================================================
+     typedef enum logic [1:0] {
+          ST_EMPTY     = 2'd0,
+          ST_ALLOCATED = 2'd1,    
+          ST_PENDING   = 2'd2,
+          ST_COMPLETE  = 2'd3
+     } entry_state_e;
+
+     entry_state_e                      state [DIR_ENTRIES];
+     directory_entry_t                  entry [DIR_ENTRIES];
+
+     logic [TAG_W_P-1:0]                next_free_ptr;
+     assign alloc_ready                 = (state[next_free_ptr] == ST_EMPTY);    // Free entry detection
+
+     // =============================================================
+     // ALLOCATION block
+     // =============================================================
+     always_ff @(posedge pclk) begin
           if (!presetn) begin
-               dir_wr_ptr <= '0;
-               dir_rd_ptr <= '0;
-               for (int i = 0; i < TAG_NUM_P; i++) begin
-                    dir_mem[i].state <= DIR_ST_EMPTY;
-                    dir_mem[i].tag   <= i[TAG_W_P-1:0];
-                    dir_mem[i].addr  <= '0;
-                    dir_mem[i].len   <= '0;
-                    dir_mem[i].size  <= '0;
-                    dir_mem[i].burst <= 2'b01; // INCR default
-                    dir_mem[i].is_write <= '0;
+               next_free_ptr <= '0;
+               alloc_tag     <= '0;
+               for (int i = 0; i < DIR_ENTRIES; i++) begin
+                    state[i] <= ST_EMPTY;
                end
-          end else begin
-               // New committed request
-               if (commit_pulse) begin
-                    dir_mem[dir_wr_ptr].addr     <= addr;
-                    dir_mem[dir_wr_ptr].len      <= len;
-                    dir_mem[dir_wr_ptr].size     <= size;
-                    dir_mem[dir_wr_ptr].is_write <= is_write;
-                    dir_mem[dir_wr_ptr].burst    <= 2'b01;        // INCR for now
-                    dir_mem[dir_wr_ptr].tag      <= dir_wr_ptr;
-                    dir_mem[dir_wr_ptr].state    <= DIR_ST_PENDING;
-                    dir_wr_ptr                   <= dir_wr_ptr + 1'b1; // simple wrap
+          end
+          else begin
+               if (alloc_valid && alloc_ready) begin
+                    entry[next_free_ptr]     <= alloc_entry;
+                    entry[next_free_ptr].tag <= next_free_ptr;
+                    state[next_free_ptr]     <= ST_ALLOCATED;
+                    alloc_tag                <= next_free_ptr;
+                    next_free_ptr            <= next_free_ptr + 1'b1;       // Move to next slot (simple round robin)
                end
+               if (dir_pop_valid && dir_pop_ready) begin
+                    state[dir_pop_tag]  <= ST_PENDING;
+                    dir_cpl_ready       <= '1;
+               end
+               if (dir_cpl_valid && dir_cpl_ready) begin
+                    state[dir_cpl_tag]  <= ST_COMPLETE;
+                    dir_cpl_ready       <= '0;
+               end
+               if (dir_consumed_valid & state[dir_consumed_tag] == ST_COMPLETE) begin
+                    state[dir_consumed_tag] <= ST_EMPTY;
+               end
+          end
+     end
+     // =============================================================
+     // POP block (ALLOCATED → PENDING)
+     // Scan for oldest ALLOCATED entry
+     // =============================================================
+     logic                   found_alloc;
+     logic [TAG_W_P-1:0]     oldest_tag;
 
-               // Txn_mgr took one pending entry → mark as ISSUED
-               if (pending_pop && pending_valid) begin
-                    dir_mem[dir_rd_ptr].state <= DIR_ST_ISSUED;
-                    dir_rd_ptr                <= dir_rd_ptr + 1'b1;
-               end
-
-               // Update directory entry according to the completion
-               if (cpl_valid) begin
-                    dir_mem[cpl_tag].state <= cpl_error ? DIR_ST_ERROR : DIR_ST_DONE;
+     always_comb begin
+          found_alloc = 1'b0;
+          oldest_tag  = '0;
+          for (int i = 0; i < DIR_ENTRIES; i++) begin                // Simple linear scan
+               if (state[i] == ST_ALLOCATED && !found_alloc) begin
+                    found_alloc = 1'b1;
+                    oldest_tag  = i;
                end
           end
      end
 
-     // Combinational "next pending" view
-     always_comb begin
-          pending_tag   = dir_rd_ptr;
-          pending_entry = dir_mem[dir_rd_ptr];
-          pending_valid = (dir_mem[dir_rd_ptr].state == DIR_ST_PENDING);
-     end
+     assign dir_pop_valid = found_alloc;
+     assign dir_pop_entry = entry[oldest_tag];
+     assign dir_pop_tag   = oldest_tag;
+
+     // always_ff @(posedge pclk) begin
+     //      if (!presetn) begin
+     //      end
+     //      else begin
+     //           if (dir_pop_valid && dir_pop_ready) begin
+     //                state[dir_pop_tag] <= ST_PENDING;
+     //           end
+     //      end
+     // end
+
+     // =============================================================
+     // COMPLETION block (PENDING → COMPLETE → EMPTY)
+     // =============================================================
+     // assign dir_cpl_ready = 1'b1;   // Always ready (FIXME)
+
+     // always_ff @(posedge pclk) begin
+     //      if (!presetn) begin
+     //      end
+     //      else begin
+     //           if (dir_cpl_valid) begin
+     //                state[dir_cpl_tag] <= ST_COMPLETE;
+     //           end
+     //      end
+     // end
+
+     // =============================================================
+     // CONSUME block (COMPLETE → EMPTY)
+     // =============================================================
+     // always_ff @(posedge pclk) begin
+     //      if (!presetn) begin
+     //      end
+     //      else if (dir_consumed_valid) begin
+     //           if (dir_consumed_valid & state[dir_consumed_tag] == ST_COMPLETE) begin
+     //                state[dir_consumed_tag] <= ST_EMPTY;
+     //           end
+     //      end
+     // end
 
      // Debug
-     // synthesis translate_off
-     always_ff @(posedge pclk)
-          if (commit_pulse)
-               $display("%t [DIR] Enq TAG=%0d is_wr=%0b addr=%h len=%0d size=%0d", $time, dir_wr_ptr, is_write, addr, len, size);
-     
+     // synthesis translate_off 
      always_ff @(posedge pclk) begin
-          if (pending_valid)
-               $display("%t [DIR] PENDING TAG=%0d state=%0d addr=%h", $time, pending_tag, dir_mem[pending_tag].state, dir_mem[pending_tag].addr);
+          if (dir_pop_valid && dir_pop_ready)          $display("%t [DIR] POP TAG=%0d addr=%h len=%0d size=%0d is_wr=%0b", $time, dir_pop_tag, entry[dir_pop_tag].addr, entry[dir_pop_tag].len, entry[dir_pop_tag].size, entry[dir_pop_tag].is_write);
+          if (dir_cpl_valid && dir_cpl_ready)          $display("%t [DIR] COMPLETE TAG=%0d wr=%0b err=%0b beats=%0d resp=%0d",$time, dir_cpl_tag,dir_cpl_is_write,dir_cpl_error,dir_cpl_num_beats,dir_cpl_resp);
+          if (alloc_valid && alloc_ready)              $display("%t [DIR] ALLOC TAG=%0d addr=%h len=%0d size=%0d is_wr=%0b", $time, alloc_tag, alloc_entry.addr, alloc_entry.len, alloc_entry.size, alloc_entry.is_write);
+          if (state[dir_consumed_tag] == ST_COMPLETE)  $display("%t [DIR] CONSUME TAG=%0d (SW done)", $time, dir_consumed_tag);
      end
-
-     always_ff @(posedge pclk)
-          if (cpl_valid)
-               $display("%t [DIR] COMPLETE TAG=%0d is_wr=%0b err=%0b beats=%0d resp=%0d", $time, cpl_tag, cpl_is_write, cpl_error, cpl_num_beats, cpl_resp);
-
      // synthesis translate_on
 
 endmodule

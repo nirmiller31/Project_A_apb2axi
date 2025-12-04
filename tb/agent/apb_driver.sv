@@ -41,20 +41,40 @@ class apb_driver extends uvm_driver #(apb_seq_item);
 
     task drive_apb(apb_seq_item req);
 
-        `uvm_info("APB_DRIVER", $sformatf("Driving APB transaction: addr=0x%0h write=%0b data=0x%0h", req.addr, req.write, req.data), apb2axi_verbosity)
+        `uvm_info("APB_DRIVER",
+        $sformatf("Driving APB transaction: addr=0x%0h write=%0b data=0x%0h",
+                    req.addr, req.write, req.data),
+        apb2axi_verbosity)
+
         @(posedge vif.PCLK);
         wait (vif.PRESETn == 1'b1);
 
-        vif.PSEL <= 1;
-        vif.PADDR <= req.addr;
+        // SETUP phase
+        vif.PSEL   <= 1;
+        vif.PADDR  <= req.addr;
         vif.PWRITE <= req.write;
         vif.PWDATA <= req.data;
-        vif.PENABLE <= 0;
+        vif.PENABLE<= 0;
+
+        // ACCESS phase
         @(posedge vif.PCLK);
         vif.PENABLE <= 1;
+
+        // ****** THIS WAS MISSING *******
+        // Wait for ready and capture read data
         @(posedge vif.PCLK);
-        vif.PSEL <= 0;
+        if (!req.write) begin
+            req.data = vif.PRDATA;   // <<<< CRITICAL FIX
+            `uvm_info("APB_DRIVER",
+                $sformatf("APB READ: addr=0x%0h PRDATA=0x%0h",
+                        req.addr, req.data),
+                apb2axi_verbosity)
+        end
+
+        // IDLE
+        vif.PSEL    <= 0;
         vif.PENABLE <= 0;
+        vif.PWRITE  <= 0;
 
     endtask
 
