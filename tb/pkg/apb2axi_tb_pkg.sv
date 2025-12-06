@@ -3,6 +3,7 @@ package apb2axi_tb_pkg;
 
      import uvm_pkg::*;
      import apb2axi_pkg::*;
+     import apb2axi_memory_pkg::*;
 
      int unsigned apb2axi_verbosity = UVM_DEBUG;
      
@@ -43,6 +44,7 @@ package apb2axi_tb_pkg;
      // ======================================================
      //  Enviorment
      // ======================================================
+     // `include "tb/bfm/apb2axi_memory_pkg.sv"
      `include "tb/bfm/axi3_slave_bfm.sv"
      `include "tb/env/apb2axi_scoreboard.sv"
      `include "tb/env/apb2axi_env.sv"

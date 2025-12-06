@@ -1,6 +1,8 @@
 class apb2axi_read_drain_seq extends apb2axi_base_seq;
      `uvm_object_utils(apb2axi_read_drain_seq)
 
+     import apb2axi_memory_pkg::*;
+
      localparam int REG_ADDR_LO   = 'h00;
      localparam int REG_ADDR_HI   = 'h04;
      localparam int REG_CMD       = 'h08;
@@ -24,14 +26,29 @@ class apb2axi_read_drain_seq extends apb2axi_base_seq;
      endfunction
 
      // Expected pattern – ADAPT to your BFM!
-     function automatic bit [APB_DATA_W-1:0] expected_clc_data(int beat_idx);
-          int unsigned base_word;
+     function automatic bit [APB_DATA_W-1:0] expected_clc_data(int word_idx);
+          const int WORDS_PER_BEAT = AXI_DATA_W / APB_DATA_W; // 2 for 64→32
+          int unsigned base_idx;
+          int unsigned axi_idx;
+          int unsigned word_in_beat;
+          mem_word_t   beat;
 
-          // Same computation as BFM:
-          base_word = cfg_addr >> $clog2(AXI_DATA_W/8);
+          // Same index computation as do_read()
+          base_idx     = addr2idx(cfg_addr);
+          axi_idx      = base_idx + (word_idx / WORDS_PER_BEAT);
+          word_in_beat = word_idx % WORDS_PER_BEAT;
 
-          // mem[idx][31:0] = idx, upper bits 0
-          return base_word + beat_idx;
+          if (axi_idx >= MEM_WORDS)
+               return '0;
+
+          beat = MEM[axi_idx];
+
+          // Little-endian slicing, same as your handler:
+          case (word_in_beat)
+               0: return beat[31:0];     // first APB word
+               1: return beat[63:32];    // second APB word
+               default: return '0;
+          endcase
      endfunction
 
      virtual task body();

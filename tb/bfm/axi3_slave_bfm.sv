@@ -95,12 +95,13 @@ class axi3_slave_bfm extends uvm_component;
             // ========= READ ADDRESS =========
             if (vif.ARVALID && vif.ARREADY) begin
                 fork
-                    automatic logic [AXI_ADDR_W-1:0] araddr = vif.ARADDR;
-                    automatic logic [3:0]           arlen  = vif.ARLEN;
-                    automatic logic [2:0]           arsize = vif.ARSIZE;
-                    automatic logic [AXI_ID_W-1:0]  arid   = vif.ARID;
+                    automatic logic [AXI_ADDR_W-1:0] araddr     = vif.ARADDR;
+                    automatic logic [3:0]           arlen       = vif.ARLEN;
+                    automatic logic [2:0]           arsize      = vif.ARSIZE;
+                    automatic logic [AXI_ID_W-1:0]  arid        = vif.ARID;
+                    automatic logic [1:0]           arburst     = vif.ARBURST;
                     begin
-                        do_read(araddr, arlen, arsize, arid);
+                        do_read(araddr, arlen, arsize, arid, arburst);
                     end
                 join_none
             end
@@ -127,27 +128,36 @@ class axi3_slave_bfm extends uvm_component;
     // READ handler (multi-beat)
     // ------------------------------------------------------------
     task automatic do_read(
-        logic [AXI_ADDR_W-1:0] araddr,
-        logic [3:0]            arlen,
-        logic [2:0]            arsize,
-        logic [AXI_ID_W-1:0]   arid
+        logic [AXI_ADDR_W-1:0]  araddr,
+        logic [3:0]             arlen,
+        logic [2:0]             arsize,
+        logic [AXI_ID_W-1:0]    arid,
+        logic [1:0]             arburst
     );
-        int beats = arlen + 1;
-        int bytes_per_beat = 1 << arsize;
-        int base_word = araddr >> $clog2(AXI_DATA_W/8);
+        int unsigned            idx;
+        mem_word_t              rdata;
 
-        `uvm_info("AXI3_BFM",
-            $sformatf("READ: addr=0x%0h beats=%0d size=%0d id=%0d",
-                      araddr, beats, bytes_per_beat, arid),
-            UVM_MEDIUM)
+        int unsigned beats          = arlen + 1;
+        int unsigned bytes_per_beat = (1 << arsize);
+
+        idx = addr2idx(araddr);
+
+        `uvm_info("AXI3_BFM", $sformatf("READ: addr=0x%0h beats=%0d size=%0d id=%0d", araddr, beats, bytes_per_beat, arid), UVM_MEDIUM)
+
+        vif.RVALID <= 1'b0;
+        vif.RLAST  <= 1'b0;
 
         for (int i = 0; i < beats; i++) begin
-            int idx = (base_word + i) % MEM_DEPTH;
+
+            if (idx < MEM_WORDS)
+                rdata = MEM[idx];
+            else
+                rdata = '0;            
 
             @(posedge vif.ACLK);
             vif.RID    <= arid;
-            vif.RDATA  <= mem[idx];
-            vif.RRESP  <= 2'b00;
+            vif.RDATA  <= rdata;
+            vif.RRESP  <= 2'b00;            // OKAY, simulate later
             vif.RLAST  <= (i == beats-1);
             vif.RVALID <= 1'b1;
 
@@ -156,8 +166,11 @@ class axi3_slave_bfm extends uvm_component;
             while (!vif.RREADY && vif.ARESETn);
 
             vif.RVALID <= 1'b0;
-        end
 
+            if (arburst == 2'b01) begin // INCR
+                idx++;
+            end
+        end
         vif.RLAST <= 0;
     endtask
 

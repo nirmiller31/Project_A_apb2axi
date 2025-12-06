@@ -68,7 +68,7 @@ module apb2axi_read_builder #(
         araddr  = entry.addr;
         arlen   = entry.len;
         arsize  = entry.size;
-        arburst = entry.burst;
+        arburst = 2'b01;//entry.burst;      //FIXME add additional burst modes
         arlock  = 1'b0;
         arcache = 4'b0011;
         arprot  = 3'b000;
@@ -117,8 +117,8 @@ module apb2axi_read_builder #(
     // synthesis translate_off
     always_ff @(posedge aclk) begin
         if (rd_pop_valid)
-            $display("%t [RD_BUILDER_DBG] FIFO valid entry: tag=%0d is_write=%0b addr=%h len=%0d",
-                      $time, entry.tag, entry.is_write, entry.addr, entry.len);
+            $display("%t [RD_BUILDER_DBG] FIFO valid entry: tag=%0d is_write=%0b addr=%h len=%0d burst=%0b",
+                      $time, entry.tag, entry.is_write, entry.addr, entry.len, entry.burst);
 
         if (arvalid && arready)
             $display("%t [RD_BUILDER_DBG] AR FIRED: TAG=%0d ADDR=%h LEN=%0d",
