@@ -116,10 +116,12 @@ module apb2axi #(
      logic        rsp_data_req;
      logic [TAG_W-1:0] rsp_data_req_tag;
      logic        rsp_data_valid;
+     logic          rsp_data_ready;
      logic [APB_DATA_W-1:0] rsp_data_out;
      logic        rsp_data_last;
 
      logic                  rdf_data_valid;
+     logic                  rdf_data_ready;
      logic [APB_DATA_W-1:0] rdf_data_out;
      logic                  rdf_data_last;
 
@@ -147,6 +149,7 @@ module apb2axi #(
           .rd_status_is_write(rd_status_is_write),
 
           .rdf_data_valid(rdf_data_valid),
+          .rdf_data_ready(rdf_data_ready),
           .rdf_data_out(rdf_data_out),
           .rdf_data_last(rdf_data_last),
           .rdf_data_req(rdf_data_req),
@@ -437,6 +440,7 @@ module apb2axi #(
           .cpl_push_data      (cq_push_data)
      );
 
+
      // handler
      apb2axi_response_handler u_handler (
           // PCLK
@@ -456,6 +460,7 @@ module apb2axi #(
           // APB drain
           .data_req(rsp_data_req),
           .data_req_tag(rsp_data_req_tag),
+          .data_ready(rsp_data_ready),
           .data_valid(rsp_data_valid),
           .data_out(rsp_data_out),
           .data_last(rsp_data_last),
@@ -483,6 +488,7 @@ module apb2axi #(
      assign rsp_data_req_tag  = rdf_data_req_tag;
 
      assign rdf_data_valid    = rsp_data_valid;
+     assign rsp_data_ready    = rdf_data_ready;
      assign rdf_data_out      = rsp_data_out;
      assign rdf_data_last     = rsp_data_last;
 

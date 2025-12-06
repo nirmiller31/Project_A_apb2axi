@@ -18,7 +18,7 @@ class apb2axi_read_drain_seq extends apb2axi_base_seq;
      function new(string name = "apb2axi_read_drain_seq");
           super.new(name);
           cfg_addr  = 64'h0000_0000_0000_1000;
-          cfg_len   = 8'd1;      // beats-1 (so 7 beats)
+          cfg_len   = 8'd6;      // beats-1 (so 7 beats)
           cfg_size  = 3'd0;
           cfg_check = 1'b1;
      endfunction
@@ -69,7 +69,7 @@ class apb2axi_read_drain_seq extends apb2axi_base_seq;
                               cfg_addr, cfg_len, cfg_size),
                     apb2axi_verbosity)
 
-          #200ns;
+          #1000ns;
 
           // 2) Poll RD_STATUS until valid
           do begin
@@ -116,15 +116,15 @@ class apb2axi_read_drain_seq extends apb2axi_base_seq;
 
                if (cfg_check) begin
                bit [APB_DATA_W-1:0] exp = expected_clc_data(i);
-               if (req.data !== exp) begin
-                    `uvm_error(get_type_name(),
-                              $sformatf("DATA MISMATCH beat %0d: got 0x%08h expected 0x%08h",
-                                        i, req.data, exp))
-               end else begin
-                    `uvm_info(get_type_name(),
-                              $sformatf("Beat %0d OK: 0x%08h", i, req.data),
-                              UVM_LOW)
-               end
+                    if (req.data !== exp) begin
+                         `uvm_error(get_type_name(),
+                                   $sformatf("DATA MISMATCH beat %0d: got 0x%08h expected 0x%08h",
+                                             i, req.data, exp))
+                    end else begin
+                         `uvm_info(get_type_name(),
+                                   $sformatf("Beat %0d OK: 0x%08h", i, req.data),
+                                   UVM_LOW)
+                    end
                end
           end
 
@@ -133,7 +133,8 @@ class apb2axi_read_drain_seq extends apb2axi_base_seq;
           req.addr  = REG_RD_STATUS;
           req.write = 1;
           req.data  = 'h1;
-          start_item(req); finish_item(req);
+          start_item(req); 
+          finish_item(req);
      endtask
 
 endclass

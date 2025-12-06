@@ -33,6 +33,7 @@ module apb2axi_reg #(
 
      // From/To RDF (data beats)
      input  logic                  rdf_data_valid,
+     output logic                  rdf_data_ready,     
      input  logic [APB_DATA_W-1:0] rdf_data_out,
      input  logic                  rdf_data_last,
      output logic                  rdf_data_req,
@@ -119,62 +120,121 @@ module apb2axi_reg #(
           end
      end
 
+
+     typedef enum logic [1:0] {
+          S_IDLE,
+          S_ARMED,
+          S_STATUS_READ,
+          S_DATA_READ
+     } apb_state_e;
+
+     apb_state_e state, next_state;
+     logic [TAG_W-1:0] armed_tag, armed_tag_next;
+     logic pready_next;
+     logic rdf_data_req_next;
+     logic [TAG_W-1:0] rdf_data_req_tag_next;
+     logic dir_consumed_valid_next;
+     logic [TAG_W-1:0] dir_consumed_tag_next;
+
      // ----------------------------------------------------------------
-     // APB pready + RDF handshake + SW consume pulse
+     // APB pready + RDF handshake + SW consume pulse  (FSM)
      // ----------------------------------------------------------------
      always_ff @(posedge pclk) begin
           if (!presetn) begin
-               rdf_data_req       <= 1'b0;
-               rdf_data_req_tag   <= '0;
-               pready             <= 1'b1;
-               rd_data_pending    <= 1'b0;
+               state               <= S_IDLE;
+               armed_tag           <= '0;
 
-               dir_consumed_valid <= 1'b0;
-               dir_consumed_tag   <= '0;
+               pready              <= 1'b1;
+               rdf_data_req        <= 1'b0;
+               rdf_data_req_tag    <= '0;
+
+               dir_consumed_valid  <= 1'b0;
+               dir_consumed_tag    <= '0;
           end else begin
-               // default: no consume pulse
-               dir_consumed_valid <= 1'b0;
+               state            <= next_state;
+               armed_tag        <= armed_tag_next;
 
-               // *** SW CONSUME: read RD_STATUS when VALID=1 ***
-               if (rd_status_re && rd_status_valid) begin
-                    dir_consumed_valid <= 1'b1;
-                    dir_consumed_tag   <= rd_status_tag;
-                    $display("[%0t][REG] RD_STATUS consumed: tag=%0d beats=%0d",
-                             $time, rd_status_tag, rd_status_num_beats);
-               end
+               pready           <= pready_next;
+               rdf_data_req     <= rdf_data_req_next;
+               rdf_data_req_tag <= rdf_data_req_tag_next;
 
-               // RD_DATA read handling (may stall)
-               if (psel && penable && !pwrite && sel_rd_data) begin
-                    // launch a request (one pulse per APB read)
-                    rdf_data_req     <= 1'b1;
-                    rdf_data_req_tag <= rd_status_tag; // use current completion TAG
-
-                    if (!rdf_data_valid) begin
-                         // no data yet → stall bus, remember we're waiting
-                         pready          <= 1'b0;
-                         rd_data_pending <= 1'b1;
-                    end else begin
-                         // data already valid this cycle → zero-wait read
-                         pready          <= 1'b1;
-                         rd_data_pending <= 1'b0;
-                    end
-               end
-               else if (rd_data_pending) begin
-                    // continue stalling until data comes
-                    rdf_data_req <= 1'b0;
-                    if (rdf_data_valid) begin
-                         pready          <= 1'b1;
-                         rd_data_pending <= 1'b0;
-                    end else begin
-                         pready          <= 1'b0;
-                    end
-               end
-               else begin
-                    // no RD_DATA access: APB always ready
-                    rdf_data_req  <= 1'b0;
-                    pready        <= 1'b1;
-               end
+               dir_consumed_valid <= dir_consumed_valid_next;
+               dir_consumed_tag   <= dir_consumed_tag_next;
           end
+     end
+
+     assign rdf_data_ready = psel && penable && !pwrite && sel_rd_data;
+
+
+     always_comb begin
+
+          next_state               = state;
+          armed_tag_next           = armed_tag;
+
+          pready_next              = 1'b1;
+          rdf_data_req_next        = 1'b0;
+          rdf_data_req_tag_next    = rdf_data_req_tag;
+
+          dir_consumed_valid_next = 1'b0;
+          dir_consumed_tag_next   = dir_consumed_tag;
+
+          
+          // -------------------------------------------------
+          // STATUS READ: complete in 1 cycle, consume + arm
+          // -------------------------------------------------
+          if (psel && penable && !pwrite && sel_rd_status && rd_status_valid) begin
+               dir_consumed_valid_next  = 1'b1;
+               dir_consumed_tag_next    = rd_status_tag;
+          end
+
+          // RD_DATA FSM
+          unique case (state)
+               S_IDLE: begin                                     // No outstanding RD_DATA transfer
+                    if (psel && penable && !pwrite && sel_rd_status) begin
+                         rdf_data_req_next             = 1'b1;
+                         rdf_data_req_tag_next         = armed_tag;
+                         next_state                    = S_ARMED;
+                    end
+               end
+               S_STATUS_READ: begin
+                    if (psel && penable && !pwrite && sel_rd_status) begin
+                         next_state                    = S_STATUS_READ;
+                    end
+                    else begin
+                         rdf_data_req_next             = 1'b1;
+                         next_state                    = S_ARMED;
+                    end
+               end
+               S_ARMED: begin
+                    if (rdf_data_valid) begin
+                         next_state                    = S_DATA_READ;
+                         pready_next                   = 1'b1;
+                         rdf_data_req_next             = 1'b0;                         
+                    end
+                    else begin
+                         pready_next                   = 1'b0;     // keep stalling
+                    end
+               end
+               S_DATA_READ: begin                                // Waiting for handler to supply rdf_data_valid
+                    if (psel && penable && !pwrite && sel_rd_data) begin
+                         if (rdf_data_valid) begin                    // This cycle completes the stalled APB transfer
+                              pready_next = 1'b0;                     // Master will sample PRDATA in this cycle
+                              if (rdf_data_last) next_state = S_IDLE; 
+                              else begin 
+                                   next_state = S_ARMED;
+                                   rdf_data_req_next             = 1'b1;
+                              end
+                         end
+                         // else begin
+                              
+                         // end
+                    end
+               end
+
+               default: begin
+                    next_state  = S_IDLE;
+               end
+          endcase
      end
 
      // ----------------------------------------------------------------
@@ -227,14 +287,6 @@ module apb2axi_reg #(
                $display("%t [REG] RD_STATUS read: valid=%0b err=%0b resp=%0d tag=%0d beats=%0d",
                         $time, rd_status_valid, rd_status_error,
                         rd_status_resp, rd_status_tag, rd_status_num_beats);
-     end
-
-     initial begin
-          $display("  TIME    psel penable pwrite sel_rd_status rd_status_we  paddr");
-          $monitor("%0t [REG_MON] psel=%0b penable=%0b pwrite=%0b sel_rd_status=%0b rd_status_we=%0b paddr=%h",
-                   $time, psel, penable, pwrite, sel_rd_status,
-                   1'b0, // rd_status_we removed from functionality
-                   paddr);
      end
 
 endmodule
