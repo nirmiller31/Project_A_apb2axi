@@ -32,7 +32,7 @@ class apb_monitor extends uvm_monitor;
                @(posedge vif.PCLK);
                // Check for valid access phase
                if (vif.PSEL && vif.PENABLE && vif.PREADY) begin
-                    $display("%t [APB_MON] WRITE addr=%0h write=%0b data=%0h", $time, vif.PADDR, vif.PWRITE, vif.PWRITE ? vif.PWDATA : vif.PRDATA);
+                    `uvm_info("APB_MONITOR", $sformatf("%t [APB_MON] WRITE addr=%0h write=%0b data=%0h", $time, vif.PADDR, vif.PWRITE, vif.PWRITE ? vif.PWDATA : vif.PRDATA), apb2axi_verbosity)
                     tr                       = apb_seq_item::type_id::create("tr", this);
                     tr.addr                  = vif.PADDR;
                     tr.write                 = vif.PWRITE;

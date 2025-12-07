@@ -1,15 +1,8 @@
-
-/*------------------------------------------------------------------------------
- * File          : apb2axi_fifo.sv
- * Project       : APB2AXI
- * Author        : Nir Miller & Ido Oreg
- * Description   : Valid/ready FIFO
- *------------------------------------------------------------------------------*/
-
 import apb2axi_pkg::*;
 
 module apb2axi_fifo #(
-    parameter int ENTRY_WIDTH = 64
+    parameter int ENTRY_WIDTH = 64,
+    parameter int DEPTH       = 4          // must be >= 1
 )(
     input  logic                   clk,
     input  logic                   resetn,
@@ -25,33 +18,47 @@ module apb2axi_fifo #(
     output logic [ENTRY_WIDTH-1:0] pop_data
 );
 
-    logic                          full;
-    logic [ENTRY_WIDTH-1:0]        data_q;
+    localparam int PTR_W = (DEPTH <= 1) ? 1 : $clog2(DEPTH);
 
-    // Push is allowed when not full
+    logic [ENTRY_WIDTH-1:0] mem [DEPTH];
+    logic [PTR_W-1:0]       wptr, rptr;
+    logic [PTR_W:0]         count;    // can count up to DEPTH
+
+    // status
+    wire full  = (count == DEPTH);
+    wire empty = (count == 0);
+
     assign push_ready = !full;
+    assign pop_valid  = !empty;
+    assign pop_data   = mem[rptr];
 
-    // Pop is allowed when full
-    assign pop_valid  = full;
-    assign pop_data   = data_q;
+    wire do_push = push_valid && push_ready;
+    wire do_pop  = pop_valid  && pop_ready;
 
     always_ff @(posedge clk or negedge resetn) begin
         if (!resetn) begin
-            full   <= 1'b0;
-            data_q <= '0;
+            wptr  <= '0;
+            rptr  <= '0;
+            count <= '0;
         end
         else begin
-            // default: no change
-            // handle push
-            if (push_valid && push_ready) begin
-                data_q <= push_data;
-                full   <= 1'b1;
+            // write
+            if (do_push) begin
+                mem[wptr] <= push_data;
+                wptr      <= (wptr + 1'b1);
             end
 
-            // handle pop
-            if (pop_valid && pop_ready) begin
-                full <= 1'b0;
+            // read
+            if (do_pop) begin
+                rptr <= (rptr + 1'b1);
             end
+
+            // update count
+            case ({do_push, do_pop})
+                2'b10: count <= count + 1'b1; // push only
+                2'b01: count <= count - 1'b1; // pop only
+                default: ;                    // same or both (no net change)
+            endcase
         end
     end
 

@@ -52,6 +52,13 @@ package apb2axi_pkg;
           DIR_ST_ERROR       // completed with error
      } dir_state_e;
 
+     typedef enum logic [1:0] {
+          ST_EMPTY     = 2'd0,
+          ST_ALLOCATED = 2'd1,    
+          ST_PENDING   = 2'd2,
+          ST_COMPLETE  = 2'd3
+     } entry_state_e;
+
      typedef struct packed {
           logic                    is_write;
           logic [AXI_ADDR_W-1:0]   addr;
@@ -59,6 +66,8 @@ package apb2axi_pkg;
           logic [2:0]              size;
           logic [1:0]              burst;
           logic [TAG_W-1:0]        tag;
+          logic [1:0]              resp;
+          logic [7:0]              num_beats;
           dir_state_e              state;
      } directory_entry_t;
      parameter int REQ_WIDTH  = $bits(directory_entry_t);

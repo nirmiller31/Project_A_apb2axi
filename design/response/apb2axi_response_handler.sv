@@ -166,7 +166,7 @@ module apb2axi_response_handler #(
         end else begin
             // defaults
             // data_valid <= 1'b0;
-            data_last  <= 1'b0;
+            // data_last  <= 1'b0;
 
             tag_idx = data_req_tag;
 
@@ -183,6 +183,7 @@ module apb2axi_response_handler #(
             end
 
             if(data_ready && data_valid) data_valid <= 1'b0;
+            if(data_ready && data_valid) data_last  <= 1'b0;
 
             if (data_req) begin
                 if (!cur_valid[tag_idx]) begin
@@ -198,7 +199,6 @@ module apb2axi_response_handler #(
                         // immediately output the *first* APB word
                         data_out   <= beat.data[0 +: APB_W];
 
-                        $display("HANDLERRRRR_DEBUG", $sformatf("%t, I putted: %0h inside data_out: %0h", $time, beat.data[0 +: APB_W], data_out));
                         data_valid <= 1'b1;
 
                         if (APB_W == DATA_W) begin

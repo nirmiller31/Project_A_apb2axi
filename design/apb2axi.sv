@@ -83,6 +83,12 @@ module apb2axi #(
      output logic                  RREADY
 );
 
+     logic [TAG_W-1:0] status_tag_sel;
+     directory_entry_t status_dir_entry;
+     entry_state_e status_dir_state;
+
+
+
      logic                 rdf_push_valid;
      rdf_entry_t           rdf_push_payload;
      logic                 rdf_push_ready;
@@ -156,7 +162,11 @@ module apb2axi #(
           .rdf_data_req_tag(rdf_data_req_tag),
 
           .dir_consumed_valid(dir_cons_valid),
-          .dir_consumed_tag(dir_cons_tag)
+          .dir_consumed_tag(dir_cons_tag),
+
+          .status_tag_sel(status_tag_sel),
+          .status_dir_entry(status_dir_entry),
+          .status_dir_state(status_dir_state)
      );
 
      // =========================================================================
@@ -204,7 +214,11 @@ module apb2axi #(
 
           // APB CONSUME → EMPTY
           .dir_consumed_valid(dir_cons_valid),
-          .dir_consumed_tag(dir_cons_tag)
+          .dir_consumed_tag(dir_cons_tag),
+
+          .status_tag_sel(status_tag_sel),
+          .status_dir_entry(status_dir_entry),
+          .status_dir_state(status_dir_state)
      );
 
      always_comb begin

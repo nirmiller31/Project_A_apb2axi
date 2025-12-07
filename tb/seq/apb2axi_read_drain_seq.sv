@@ -19,7 +19,7 @@ class apb2axi_read_drain_seq extends apb2axi_base_seq;
 
      function new(string name = "apb2axi_read_drain_seq");
           super.new(name);
-          cfg_addr  = 64'h0000_0000_0000_1000;
+          cfg_addr  = 64'h0000000000001680;
           cfg_len   = 8'd6;      // beats-1 (so 7 beats)
           cfg_size  = 3'd0;
           cfg_check = 1'b1;
@@ -87,6 +87,8 @@ class apb2axi_read_drain_seq extends apb2axi_base_seq;
                     apb2axi_verbosity)
 
           #1000ns;
+
+          set_tag_to_consume(0);
 
           // 2) Poll RD_STATUS until valid
           do begin

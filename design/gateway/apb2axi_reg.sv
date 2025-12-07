@@ -41,7 +41,11 @@ module apb2axi_reg #(
 
      // Ack back to Directory (SW consumed completion)
      output logic                  dir_consumed_valid,
-     output logic [TAG_W-1:0]      dir_consumed_tag
+     output logic [TAG_W-1:0]      dir_consumed_tag,
+
+     output logic [TAG_W-1:0]      status_tag_sel,
+     input directory_entry_t       status_dir_entry,
+     input entry_state_e           status_dir_state
 );
 
      // ----------------------------------------------------------------
@@ -51,14 +55,16 @@ module apb2axi_reg #(
      //  0x08 : CMD
      //  0x0C : RD_STATUS (RO)
      //  0x10 : RD_DATA   (RO, streaming)
+     //  0x14 : TAG_TO_CONSUME
      // ----------------------------------------------------------------
      localparam REG_ADDR_ADDR_LO   = 'h00;
      localparam REG_ADDR_ADDR_HI   = 'h04;
      localparam REG_ADDR_CMD       = 'h08;
      localparam REG_ADDR_RD_STATUS = 'h0C;
      localparam REG_ADDR_RD_DATA   = 'h10;
+     localparam REG_RD_TAG_SEL     = 'h14;
 
-     logic sel_addr_lo, sel_addr_hi, sel_cmd, sel_rd_status, sel_rd_data;
+     logic sel_addr_lo, sel_addr_hi, sel_cmd, sel_rd_status, sel_rd_data, sel_tag_to_consume;
 
      logic          addr_lo_we, addr_lo_we_d;
      logic [31:0]   addr_lo_rd_val;
@@ -66,6 +72,8 @@ module apb2axi_reg #(
      logic [31:0]   addr_hi_rd_val;
      logic          cmd_we;
      logic [31:0]   cmd_rd_val;
+     logic          tag_to_consume_we;
+     logic [31:0]   tag_to_consume_rd_val;
 
      logic          rd_status_re;
      logic          rd_data_pending;
@@ -73,24 +81,26 @@ module apb2axi_reg #(
      assign pslverr = 1'b0;
 
      // Outputs for Directory
-     assign addr     = {addr_hi_rd_val, addr_lo_rd_val};
-     assign len      = cmd_rd_val[7:0];
-     assign size     = cmd_rd_val[10:8];
-     assign is_write = cmd_rd_val[31];
+     assign addr                   = {addr_hi_rd_val, addr_lo_rd_val};
+     assign len                    = cmd_rd_val[7:0];
+     assign size                   = cmd_rd_val[10:8];
+     assign is_write               = cmd_rd_val[31];
 
-     assign sel_addr_lo   = ({paddr[4:2], 2'b00} == REG_ADDR_ADDR_LO);
-     assign sel_addr_hi   = ({paddr[4:2], 2'b00} == REG_ADDR_ADDR_HI);
-     assign sel_cmd       = ({paddr[4:2], 2'b00} == REG_ADDR_CMD);
-     assign sel_rd_status = ({paddr[4:2], 2'b00} == REG_ADDR_RD_STATUS);
-     assign sel_rd_data   = ({paddr[4:2], 2'b00} == REG_ADDR_RD_DATA);  
+     assign sel_addr_lo            = ({paddr[4:2], 2'b00} == REG_ADDR_ADDR_LO);
+     assign sel_addr_hi            = ({paddr[4:2], 2'b00} == REG_ADDR_ADDR_HI);
+     assign sel_cmd                = ({paddr[4:2], 2'b00} == REG_ADDR_CMD);
+     assign sel_rd_status          = ({paddr[4:2], 2'b00} == REG_ADDR_RD_STATUS);
+     assign sel_rd_data            = ({paddr[4:2], 2'b00} == REG_ADDR_RD_DATA);
+     assign sel_tag_to_consume     = ({paddr[4:2], 2'b00} == REG_RD_TAG_SEL);  
 
      // Write enables for RW regs
-     assign addr_lo_we = psel & penable & pwrite & sel_addr_lo;
-     assign addr_hi_we = psel & penable & pwrite & sel_addr_hi;
-     assign cmd_we     = psel & penable & pwrite & sel_cmd;
+     assign addr_lo_we             = psel & penable & pwrite & sel_addr_lo;
+     assign addr_hi_we             = psel & penable & pwrite & sel_addr_hi;
+     assign cmd_we                 = psel & penable & pwrite & sel_cmd;
+     assign tag_to_consume_we      = psel & penable & pwrite & sel_tag_to_consume;
 
      // READ enable for RD_STATUS (used for consume)
-     assign rd_status_re = psel && penable && !pwrite && sel_rd_status;
+     assign rd_status_re           = psel && penable && !pwrite && sel_rd_status;
 
      // ----------------------------------------------------------------
      // APB read mux (combinational PRDATA)
@@ -106,11 +116,11 @@ module apb2axi_reg #(
                     // KEEP YOUR ORIGINAL LAYOUT (TB IS ALIGNED TO THIS)
                     sel_rd_status: prdata = {
                          16'b0,
-                         rd_status_valid,        // bit 15
-                         rd_status_error,        // bit 14
-                         rd_status_resp,         // [13:12]
-                         rd_status_num_beats,    // [11:4]
-                         rd_status_tag           // [3:0]
+                         rd_status_valid, //status_dir_entry.state == DIR_ST_DONE,        // bit 15
+                         status_dir_entry.state == DIR_ST_ERROR,        // bit 14
+                         status_dir_entry.resp,         // [13:12]
+                         status_dir_entry.num_beats,    // [11:4]
+                         status_dir_entry.tag           // [3:0]
                     };
 
                     sel_rd_data:   prdata = rdf_data_out[APB_DATA_W-1:0];
@@ -165,6 +175,8 @@ module apb2axi_reg #(
 
      assign rdf_data_ready = psel && penable && !pwrite && sel_rd_data;
 
+     assign status_tag_sel = tag_to_consume_rd_val;
+
 
      always_comb begin
 
@@ -190,18 +202,16 @@ module apb2axi_reg #(
           // RD_DATA FSM
           unique case (state)
                S_IDLE: begin                                     // No outstanding RD_DATA transfer
-                    if (psel && penable && !pwrite && sel_rd_status) begin
-                         rdf_data_req_next             = 1'b1;
-                         rdf_data_req_tag_next         = armed_tag;
-                         next_state                    = S_ARMED;
+                    if (psel && penable && pwrite && sel_tag_to_consume) begin
+                         // rdf_data_req_next             = 1'b1;
+                         rdf_data_req_tag_next         = tag_to_consume_rd_val;
+                         next_state                    = S_STATUS_READ;
                     end
                end
                S_STATUS_READ: begin
                     if (psel && penable && !pwrite && sel_rd_status) begin
-                         next_state                    = S_STATUS_READ;
-                    end
-                    else begin
                          rdf_data_req_next             = 1'b1;
+                         rdf_data_req_tag_next         = tag_to_consume_rd_val;
                          next_state                    = S_ARMED;
                     end
                end
@@ -242,14 +252,16 @@ module apb2axi_reg #(
      // ----------------------------------------------------------------
      always_ff @(posedge pclk) begin
           if (!presetn) begin
-               addr_lo_rd_val <= '0;
-               addr_hi_rd_val <= '0;
-               cmd_rd_val     <= '0;
+               addr_lo_rd_val                                         <= '0;
+               addr_hi_rd_val                                         <= '0;
+               cmd_rd_val                                             <= '0;
+               tag_to_consume_rd_val                                  <= '0;
           end 
           else begin
-               if (addr_lo_we) addr_lo_rd_val <= pwdata;
-               if (addr_hi_we) addr_hi_rd_val <= pwdata;
-               if (cmd_we)     cmd_rd_val     <= pwdata;
+               if (addr_lo_we)               addr_lo_rd_val           <= pwdata;
+               if (addr_hi_we)               addr_hi_rd_val           <= pwdata;
+               if (cmd_we)                   cmd_rd_val               <= pwdata;
+               if (tag_to_consume_we)        tag_to_consume_rd_val    <= pwdata;
           end
      end
 
