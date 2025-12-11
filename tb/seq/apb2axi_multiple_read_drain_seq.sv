@@ -50,18 +50,29 @@ class apb2axi_multiple_read_drain_seq extends apb2axi_base_seq;
      task drain_and_check(int idx);
           bit [31:0] status, word32, exp32;
           int num_beats, total_words;
-          int w, word_idx = 0;
+          int word_idx = 0;
+          // Decode RD_STATUS fields exactly as in regfile
+          bit [3:0]  st_tag;
+          bit [7:0]  st_beats;
+          bit [1:0]  st_resp;
+          bit        st_err;
+          bit        st_valid;
           const int WORDS_PER_BEAT = AXI_DATA_W / APB_DATA_W;
 
           // poll until valid (2-cycle hazard safe)
           // repeat (2) 
           apb_read_reg(REG_RD_STATUS, status);
 
-          num_beats = status[11:4];        // raw from regfile
-          `uvm_info("MULTI_READ", $sformatf("aNum of Beats for TAG=%d is=%0d", num_beats, idx), UVM_NONE)
-          total_words = (num_beats + 1) * WORDS_PER_BEAT;
+          st_tag   = status[3:0];
+          st_beats = status[11:4];
+          st_resp  = status[13:12];
+          st_err   = status[14];
+          st_valid = status[15];
+          `uvm_info("MULTI_READ", $sformatf("RD_STATUS RAW=0x%08h  | valid=%0b err=%0b resp=%0d tag=%0d beats=%0d", status, st_valid, st_err, st_resp, st_tag, st_beats ), UVM_NONE)
 
-          for (w = 0; w < 6; w++) begin
+          total_words = (st_beats + 1) * WORDS_PER_BEAT;
+
+          for (int w = 0; w < total_words; w++) begin
                apb_read_reg(REG_RD_DATA, word32);
                exp32 = calc_expected_rdata(addrs[idx], word_idx);
 
