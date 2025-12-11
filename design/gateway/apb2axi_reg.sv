@@ -18,10 +18,7 @@ module apb2axi_reg #(
 
      // Outputs to Directory
      output logic                  commit_pulse,
-     output logic [AXI_ADDR_W-1:0] addr,
-     output logic [7:0]            len,
-     output logic [2:0]            size,
-     output logic                  is_write, 
+     output directory_entry_t      dir_alloc_entry,
 
      // Inputs from response_handler (PCLK domain)
      input  logic                  rd_status_valid,
@@ -41,7 +38,6 @@ module apb2axi_reg #(
 
      // Ack back to Directory (SW consumed completion)
      output logic                  dir_consumed_valid,
-     // output logic [TAG_W-1:0]      dir_consumed_tag,
 
      output logic [TAG_W-1:0]      status_tag_sel,
      input directory_entry_t       status_dir_entry,
@@ -76,31 +72,30 @@ module apb2axi_reg #(
      logic [31:0]   tag_to_consume_rd_val;
 
      logic          rd_status_re;
-     logic          rd_data_pending;
 
-     assign pslverr = 1'b0;
+     assign pslverr                = 1'b0;
 
      // Outputs for Directory
-     assign addr                   = {addr_hi_rd_val, addr_lo_rd_val};
-     assign len                    = cmd_rd_val[7:0];
-     assign size                   = cmd_rd_val[10:8];
-     assign is_write               = cmd_rd_val[31];
+     assign dir_alloc_entry.addr        = {addr_hi_rd_val, addr_lo_rd_val};
+     assign dir_alloc_entry.len         = cmd_rd_val[7:0];
+     assign dir_alloc_entry.size        = cmd_rd_val[10:8];
+     assign dir_alloc_entry.is_write    = cmd_rd_val[31];
 
-     assign sel_addr_lo            = ({paddr[4:2], 2'b00} == REG_ADDR_ADDR_LO);
-     assign sel_addr_hi            = ({paddr[4:2], 2'b00} == REG_ADDR_ADDR_HI);
-     assign sel_cmd                = ({paddr[4:2], 2'b00} == REG_ADDR_CMD);
-     assign sel_rd_status          = ({paddr[4:2], 2'b00} == REG_ADDR_RD_STATUS);
-     assign sel_rd_data            = ({paddr[4:2], 2'b00} == REG_ADDR_RD_DATA);
-     assign sel_tag_to_consume     = ({paddr[4:2], 2'b00} == REG_RD_TAG_SEL);  
+     assign sel_addr_lo                 = ({paddr[4:2], 2'b00} == REG_ADDR_ADDR_LO);
+     assign sel_addr_hi                 = ({paddr[4:2], 2'b00} == REG_ADDR_ADDR_HI);
+     assign sel_cmd                     = ({paddr[4:2], 2'b00} == REG_ADDR_CMD);
+     assign sel_rd_status               = ({paddr[4:2], 2'b00} == REG_ADDR_RD_STATUS);
+     assign sel_rd_data                 = ({paddr[4:2], 2'b00} == REG_ADDR_RD_DATA);
+     assign sel_tag_to_consume          = ({paddr[4:2], 2'b00} == REG_RD_TAG_SEL);  
 
      // Write enables for RW regs
-     assign addr_lo_we             = psel & penable & pwrite & sel_addr_lo;
-     assign addr_hi_we             = psel & penable & pwrite & sel_addr_hi;
-     assign cmd_we                 = psel & penable & pwrite & sel_cmd;
-     assign tag_to_consume_we      = psel & penable & pwrite & sel_tag_to_consume;
+     assign addr_lo_we                  = psel & penable & pwrite & sel_addr_lo;
+     assign addr_hi_we                  = psel & penable & pwrite & sel_addr_hi;
+     assign cmd_we                      = psel & penable & pwrite & sel_cmd;
+     assign tag_to_consume_we           = psel & penable & pwrite & sel_tag_to_consume;
 
      // READ enable for RD_STATUS (used for consume)
-     assign rd_status_re           = psel && penable && !pwrite && sel_rd_status;
+     assign rd_status_re                = psel && penable && !pwrite && sel_rd_status;
 
      // ----------------------------------------------------------------
      // APB read mux (combinational PRDATA)
@@ -116,11 +111,11 @@ module apb2axi_reg #(
                     // KEEP YOUR ORIGINAL LAYOUT (TB IS ALIGNED TO THIS)
                     sel_rd_status: prdata = {
                          16'b0,
-                         rd_status_valid, //status_dir_entry.state == DIR_ST_DONE,        // bit 15
-                         status_dir_entry.state == DIR_ST_ERROR,        // bit 14
-                         status_dir_entry.resp,         // [13:12]
-                         status_dir_entry.num_beats,    // [11:4]
-                         status_dir_entry.tag           // [3:0]
+                         status_dir_entry.state == DIR_ST_DONE,       // bit 15
+                         status_dir_entry.state == DIR_ST_ERROR,      // bit 14
+                         status_dir_entry.resp,                       // [13:12]
+                         status_dir_entry.num_beats,                  // [11:4]
+                         status_dir_entry.tag                         // [3:0]
                     };
 
                     sel_rd_data:   prdata = rdf_data_out[APB_DATA_W-1:0];
@@ -144,7 +139,6 @@ module apb2axi_reg #(
      logic rdf_data_req_next;
      logic [TAG_W-1:0] rdf_data_req_tag_next;
      logic dir_consumed_valid_next;
-     // logic [TAG_W-1:0] dir_consumed_tag_next;
 
      // ----------------------------------------------------------------
      // APB pready + RDF handshake + SW consume pulse  (FSM)
@@ -189,9 +183,8 @@ module apb2axi_reg #(
 
           // RD_DATA FSM
           unique case (state)
-               S_IDLE: begin                                     // No outstanding RD_DATA transfer
+               S_IDLE: begin
                     if (psel && penable && pwrite && sel_tag_to_consume) begin
-                         rdf_data_req_tag_next         = tag_to_consume_rd_val;
                          next_state                    = S_STATUS_READ;
                     end
                end
@@ -277,18 +270,30 @@ module apb2axi_reg #(
                $display("%t [REG_DBG] AddrLo Write Enable asserted at paddr=%h pwdata=%h",
                         $time, paddr, pwdata);
 
-          if (commit_pulse)
-               $display("%t [REG] COMMIT addr=%h len=%0d size=%0d is_write=%0b",
-                        $time, addr, len, size, is_write);
+          // if (commit_pulse)
+          //      $display("%t [REG] COMMIT addr=%h len=%0d size=%0d is_write=%0b",
+          //               $time, addr, len, size, is_write);
 
           if (addr_lo_we || addr_hi_we || cmd_we)
                $display("%t [REGFILE] WRITE at addr=%h data=%h",
                         $time, paddr, pwdata);
 
-          if (psel && penable && !pwrite && sel_rd_status)
+          if (psel && penable && !pwrite && sel_rd_status) begin
                $display("%t [REG] RD_STATUS read: valid=%0b err=%0b resp=%0d tag=%0d beats=%0d",
                         $time, rd_status_valid, rd_status_error,
                         rd_status_resp, rd_status_tag, rd_status_num_beats);
+
+               if ($test$plusargs("APB2AXI_REG_DEBUG")) begin
+                    $display("%t [REG_DIRSTAT] tag_sel=%0d dir_state=%0d entry.state=%0d resp=%0d beats=%0d tag=%0d",
+                             $time,
+                             status_tag_sel,
+                             status_dir_state,
+                             status_dir_entry.state,
+                             status_dir_entry.resp,
+                             status_dir_entry.num_beats,
+                             status_dir_entry.tag);
+               end
+          end
      end
 
 endmodule

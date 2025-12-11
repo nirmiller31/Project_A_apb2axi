@@ -66,10 +66,11 @@ class apb_driver extends uvm_driver #(apb_seq_item);
         end
 
         // IDLE Phase
-        @(posedge vif.PCLK);
         vif.PSEL    <= 0;
         vif.PENABLE <= 0;
         vif.PWRITE  <= 0;
+
+        repeat($urandom_range(0,20)) @(posedge vif.PCLK);
 
     endtask
 

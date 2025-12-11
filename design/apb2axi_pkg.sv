@@ -89,10 +89,10 @@ package apb2axi_pkg;
      // Read Data FIFO entry
      // --------------------------------------------------
      typedef struct packed {
-     logic [TAG_W-1:0] tag;
-     logic [AXI_DATA_W-1:0] data;
-     logic                  last;
-     logic [1:0]            resp;
+          logic [TAG_W-1:0]        tag;
+          logic [AXI_DATA_W-1:0]   data;
+          logic                    last;
+          logic [1:0]              resp;
      } rdf_entry_t;
      parameter int RDF_W = $bits(rdf_entry_t);
 

@@ -137,36 +137,6 @@ module apb2axi #(
      // From regfile to directory
      logic dir_cons_valid;
 
-     apb2axi_reg u_reg (
-          .pclk(PCLK), .presetn(PRESETn),
-          .psel(PSEL), .penable(PENABLE), .pwrite(PWRITE),
-          .paddr(PADDR), .pwdata(PWDATA),
-          .prdata(PRDATA), .pready(PREADY), .pslverr(PSLVERR),
-
-          .commit_pulse(commit_pulse),
-          .addr(addr), .len(len), .size(size), .is_write(is_write),
-
-          .rd_status_valid(rd_status_valid),
-          .rd_status_error(rd_status_error),
-          .rd_status_resp(rd_status_resp),
-          .rd_status_tag(rd_status_tag),
-          .rd_status_num_beats(rd_status_num_beats),
-          .rd_status_is_write(rd_status_is_write),
-
-          .rdf_data_valid(rdf_data_valid),
-          .rdf_data_ready(rdf_data_ready),
-          .rdf_data_out(rdf_data_out),
-          .rdf_data_last(rdf_data_last),
-          .rdf_data_req(rdf_data_req),
-          .rdf_data_req_tag(rdf_data_req_tag),
-
-          .dir_consumed_valid(dir_cons_valid),
-
-          .status_tag_sel(status_tag_sel),
-          .status_dir_entry(status_dir_entry),
-          .status_dir_state(status_dir_state)
-     );
-
      // =========================================================================
      // 2. DIRECTORY
      // =========================================================================
@@ -218,13 +188,44 @@ module apb2axi #(
           .status_dir_state(status_dir_state)
      );
 
+     apb2axi_reg u_reg (
+          .pclk(PCLK), 
+          .presetn(PRESETn),
+          .psel(PSEL), 
+          .penable(PENABLE), 
+          .pwrite(PWRITE),
+          .paddr(PADDR), 
+          .pwdata(PWDATA),
+          .prdata(PRDATA), 
+          .pready(PREADY), 
+          .pslverr(PSLVERR),
+
+          .commit_pulse(commit_pulse),
+          .dir_alloc_entry(dir_alloc_entry),
+
+          .rd_status_valid(rd_status_valid),
+          .rd_status_error(rd_status_error),
+          .rd_status_resp(rd_status_resp),
+          .rd_status_tag(rd_status_tag),
+          .rd_status_num_beats(rd_status_num_beats),
+          .rd_status_is_write(rd_status_is_write),
+
+          .rdf_data_valid(rdf_data_valid),
+          .rdf_data_ready(rdf_data_ready),
+          .rdf_data_out(rdf_data_out),
+          .rdf_data_last(rdf_data_last),
+          .rdf_data_req(rdf_data_req),
+          .rdf_data_req_tag(rdf_data_req_tag),
+
+          .dir_consumed_valid(dir_cons_valid),
+
+          .status_tag_sel(status_tag_sel),
+          .status_dir_entry(status_dir_entry),
+          .status_dir_state(status_dir_state)
+     );
+
      always_comb begin
           dir_alloc_valid           = commit_pulse;
-          dir_alloc_entry.addr      = addr;
-          dir_alloc_entry.len       = len;
-          dir_alloc_entry.size      = size;
-          dir_alloc_entry.is_write  = is_write;
-          dir_alloc_entry.tag       = '0;
      end
 
      // ============================================================
@@ -238,11 +239,6 @@ module apb2axi #(
      logic                 wr_pop_valid;
      logic                 wr_pop_ready;
      logic [REQ_WIDTH-1:0] wr_pop_data;
-
-     directory_entry_t     wr_entry_out;
-
-     // assign wr_push_valid = commit_pulse & gw_entry.is_write;
-     // assign wr_push_data  = gw_entry;
 
      // ============================================================
      // Instantiate Write_FIFO
@@ -272,11 +268,6 @@ module apb2axi #(
      logic                 rd_pop_valid;
      logic                 rd_pop_ready;
      logic [REQ_WIDTH-1:0] rd_pop_data;
-
-     directory_entry_t     rd_entry_out;
-
-     // assign rd_push_valid = commit_pulse & ~gw_entry.is_write;
-     // assign rd_push_data  = gw_entry;
 
      // ============================================================
      // Instantiate Write_FIFO

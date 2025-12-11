@@ -17,7 +17,7 @@ class apb2axi_multiple_read_drain_seq extends apb2axi_base_seq;
      constraint addr_range_c {
           foreach (addrs[i]) if (i < num_reads) {
                addrs[i] inside {
-               [64'h0000_0000_0000_1000 : 64'h0000_0000_0000_17F8]
+                    [64'h0000_0000_0000_1000 : 64'h0000_0000_0000_17F8]
                };
                addrs[i][2:0] == 3'b000;   // 8-byte aligned
           }
@@ -37,7 +37,9 @@ class apb2axi_multiple_read_drain_seq extends apb2axi_base_seq;
           cmd        = '0;
           cmd[31]    = 1'b0;     // READ
           cmd[10:8]  = 3'd3;     // size=8 bytes
-          cmd[7:0]   = 8'd2;     // len=0 → 1 AXI beat
+          cmd[7:0]   = $urandom_range(0,15);
+
+          `uvm_info("MULTI_READ", $sformatf("CMD RAW=0x%08h  | is_write=%0d size=%0d len=%0d", cmd, cmd[31], cmd[10:8], cmd[7:0]), UVM_NONE)
 
           apb_write_reg(REG_CMD,     cmd);
           apb_write_reg(REG_ADDR_HI, addr_hi);
@@ -70,7 +72,7 @@ class apb2axi_multiple_read_drain_seq extends apb2axi_base_seq;
           st_valid = status[15];
           `uvm_info("MULTI_READ", $sformatf("RD_STATUS RAW=0x%08h  | valid=%0b err=%0b resp=%0d tag=%0d beats=%0d", status, st_valid, st_err, st_resp, st_tag, st_beats ), UVM_NONE)
 
-          total_words = (st_beats + 1) * WORDS_PER_BEAT;
+          total_words = ((st_beats == 1) ? 1 : (st_beats + 1)) * WORDS_PER_BEAT;
 
           for (int w = 0; w < total_words; w++) begin
                apb_read_reg(REG_RD_DATA, word32);

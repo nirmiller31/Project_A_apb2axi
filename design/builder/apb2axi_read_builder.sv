@@ -1,13 +1,3 @@
-/*------------------------------------------------------------------------------
- * File          : apb2axi_read_builder.sv
- * Project       : APB2AXI
- * Author        : Nir Miller & Ido Oreg
- * Description   : Consumes Read FIFO entries and issues AXI AR + RREADY.
- *                 Future-safe: supports bursts, outstanding, and clean handshakes.
- *------------------------------------------------------------------------------*/
-
-import apb2axi_pkg::*;
-
 module apb2axi_read_builder #(
     parameter int AXI_ADDR_W   = AXI_ADDR_W,
     parameter int AXI_DATA_W   = AXI_DATA_W,
@@ -16,12 +6,12 @@ module apb2axi_read_builder #(
     input  logic                     aclk,
     input  logic                     aresetn,
 
-    // Connection to READ FIFO
+    // READ FIFO
     input  logic                     rd_pop_valid,
     input  logic [FIFO_ENTRY_W-1:0]  rd_pop_data,
     output logic                     rd_pop_ready,
 
-    // AXI Read Address Channel (AR)
+    // AXI AR
     output logic [AXI_ID_W-1:0]      arid,
     output logic [AXI_ADDR_W-1:0]    araddr,
     output logic [3:0]               arlen,
@@ -33,7 +23,7 @@ module apb2axi_read_builder #(
     output logic                     arvalid,
     input  logic                     arready,
 
-    // AXI Read Data Channel (R)
+    // AXI R
     input  logic [AXI_ID_W-1:0]      rid,
     input  logic [AXI_DATA_W-1:0]    rdata,
     input  logic [1:0]               rresp,
@@ -42,95 +32,55 @@ module apb2axi_read_builder #(
     output logic                     rready
 );
 
-    // ---------------------------
-    // Decode Directory Entry
-    // ---------------------------
     directory_entry_t entry;
     assign entry = rd_pop_data;
 
-    // ---------------------------
-    // State Machine
-    // ---------------------------
-    typedef enum logic [1:0] {RB_IDLE, RB_SEND_AR, RB_WAIT_R} rb_state_e;
-    rb_state_e state, next_state;
+    assign arlock  = 1'b0;
+    assign arcache = 4'b0011;
+    assign arprot  = 3'b000;
+    assign rready  = 1'b1;
 
-    // ---------------------------
-    // Combinational Logic
-    // ---------------------------
-    always_comb begin
-        // defaults
-        arvalid      = 1'b0;
-        rready       = 1'b0;
-        rd_pop_ready = 1'b0;
+    always_ff @(posedge aclk) begin
+        if (!aresetn) begin
+            arvalid      <= 1'b0;
+            rd_pop_ready <= 1'b0;
+        end else begin
 
-        // AR defaults
-        arid    = entry.tag;     // proper ID mapping
-        araddr  = entry.addr;
-        arlen   = entry.len;
-        arsize  = entry.size;
-        arburst = 2'b01;//entry.burst;      //FIXME add additional burst modes
-        arlock  = 1'b0;
-        arcache = 4'b0011;
-        arprot  = 3'b000;
+            rd_pop_ready <= 1'b0;
 
-        next_state = state;
+            if ((!arvalid || arready) && rd_pop_valid) begin
 
-        case (state)
+                arid    <= entry.tag;
+                araddr  <= entry.addr;
+                arlen   <= entry.len[3:0];
+                arsize  <= entry.size;
+                arburst <= 2'b01;            // INCR
 
-            RB_IDLE: begin
-                if (rd_pop_valid && !entry.is_write)
-                    next_state = RB_SEND_AR;
+                arvalid <= 1'b1;
+                rd_pop_ready <= 1'b1;
+
+            end else begin
+                if (arvalid && !arready)
+                    arvalid <= 1'b1;
+                else
+                    arvalid <= 1'b0;
             end
-
-            RB_SEND_AR: begin
-                arvalid = 1'b1;
-
-                if (arvalid && arready) begin
-                    // we consumed the entry here
-                    rd_pop_ready = 1'b1;
-                    next_state   = RB_WAIT_R;
-                end
-            end
-
-            RB_WAIT_R: begin
-                rready = 1'b1;
-
-                if (rvalid && rready && rlast)
-                    next_state = RB_IDLE;
-            end
-        endcase
+        end
     end
 
-    // ---------------------------
-    // Sequential State Register
-    // ---------------------------
-    always_ff @(posedge aclk or negedge aresetn) begin
-        if (!aresetn)
-            state <= RB_IDLE;
-        else
-            state <= next_state;
-    end
-
-    // ---------------------------
-    // Debug (for bring-up)
-    // ---------------------------
-    // synthesis translate_off
+    // Debug prints
     always_ff @(posedge aclk) begin
         if (rd_pop_valid)
-            $display("%t [RD_BUILDER_DBG] FIFO valid entry: tag=%0d is_write=%0b addr=%h len=%0d burst=%0b",
-                      $time, entry.tag, entry.is_write, entry.addr, entry.len, entry.burst);
+            $display("%t [RD_BUILDER_DBG] FIFO entry: tag=%0d addr=%h len=%0d",
+                     $time, entry.tag, entry.addr, entry.len);
 
         if (arvalid && arready)
-            $display("%t [RD_BUILDER_DBG] AR FIRED: TAG=%0d ADDR=%h LEN=%0d",
+            $display("%t [RD_BUILDER_DBG] AR ISSUED: tag=%0d addr=%h len=%0d",
                      $time, arid, araddr, arlen);
 
         if (rvalid && rready)
-            $display("%t [RD_BUILDER_DBG] RBEAT: rid=%0d rlast=%0b rresp=%0d",
-                     $time, rid, rlast, rresp);
-
-        if (rvalid && rready && rlast)
-            $display("%t [RD_BUILDER_DBG] READ COMPLETE (TAG=%0d)", $time, rid);
+            $display("%t [RD_BUILDER_DBG] RBEAT: ID=%0d last=%0b", 
+                     $time, rid, rlast);
     end
-    // synthesis translate_on
 
 endmodule
