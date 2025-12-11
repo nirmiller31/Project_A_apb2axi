@@ -20,6 +20,7 @@ class apb2axi_bringup_test extends apb2axi_base_test;
           apb2axi_multiple_beat_read_seq     mb_rd_bringup_seq;
           apb2axi_read_drain_seq             rd_drain_bringup_seq;
           apb2axi_multiple_read_drain_seq    multiple_rd_drain_bringup_seq;
+          apb2axi_reconsume_same_tag_seq     reconsume_same_tag_seq;
 
           phase.raise_objection(this);
 
@@ -52,6 +53,12 @@ class apb2axi_bringup_test extends apb2axi_base_test;
                multiple_rd_drain_bringup_seq.m_env   = env;
                multiple_rd_drain_bringup_seq.start(env.apb_ag.apb_seqr);
           end
+          else if (seq_sel.tolower() == "recon") begin
+               `uvm_info("BRINGUP_TEST", "Running CONSUME bringup sequence", apb2axi_verbosity)
+               reconsume_same_tag_seq         = apb2axi_reconsume_same_tag_seq::type_id::create("rd_seq");
+               reconsume_same_tag_seq.m_env   = env;
+               reconsume_same_tag_seq.start(env.apb_ag.apb_seqr);
+          end          
           else begin
                `uvm_info("BRINGUP_TEST", "Running (original) bringup sequence", apb2axi_verbosity)
                bringup_seq      = apb2axi_bringup_seq::type_id::create("wr_seq");

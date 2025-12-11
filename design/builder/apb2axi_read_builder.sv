@@ -45,25 +45,26 @@ module apb2axi_read_builder #(
             arvalid      <= 1'b0;
             rd_pop_ready <= 1'b0;
         end else begin
+            rd_pop_ready <= 1'b0;   // default
 
-            rd_pop_ready <= 1'b0;
-
-            if ((!arvalid || arready) && rd_pop_valid) begin
-
+            // Hold ARVALID until handshake
+            if (arvalid && !arready) begin
+                arvalid <= 1'b1;
+            end
+            // Launch NEW request only when ARVALID is 0
+            else if (!arvalid && rd_pop_valid) begin
                 arid    <= entry.tag;
                 araddr  <= entry.addr;
                 arlen   <= entry.len[3:0];
                 arsize  <= entry.size;
-                arburst <= 2'b01;            // INCR
+                arburst <= 2'b01;
 
-                arvalid <= 1'b1;
-                rd_pop_ready <= 1'b1;
-
-            end else begin
-                if (arvalid && !arready)
-                    arvalid <= 1'b1;
-                else
-                    arvalid <= 1'b0;
+                arvalid      <= 1'b1;
+                rd_pop_ready <= 1'b1;   // pop exactly once
+            end
+            // Otherwise: drop ARVALID after handshake
+            else begin
+                arvalid <= 1'b0;
             end
         end
     end

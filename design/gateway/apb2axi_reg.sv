@@ -73,6 +73,8 @@ module apb2axi_reg #(
 
      logic          rd_status_re;
 
+     logic          new_tag_set;
+
      assign pslverr                = 1'b0;
 
      // Outputs for Directory
@@ -169,6 +171,7 @@ module apb2axi_reg #(
 
      assign status_tag_sel = tag_to_consume_rd_val;
 
+     assign new_tag_set    = psel && penable && pwrite && sel_tag_to_consume;
 
      always_comb begin
 
@@ -184,19 +187,25 @@ module apb2axi_reg #(
           // RD_DATA FSM
           unique case (state)
                S_IDLE: begin
-                    if (psel && penable && pwrite && sel_tag_to_consume) begin
+                    if (new_tag_set) begin
                          next_state                    = S_STATUS_READ;
                     end
                end
                S_STATUS_READ: begin
-                    if (psel && penable && !pwrite && sel_rd_status) begin
+                    if (new_tag_set) begin
+                         next_state                    = S_STATUS_READ;
+                    end                    
+                    else if (psel && penable && !pwrite && sel_rd_status) begin
                          rdf_data_req_next             = 1'b1;
                          rdf_data_req_tag_next         = tag_to_consume_rd_val;
                          next_state                    = S_ARMED;
                     end
                end
                S_ARMED: begin
-                    if (rdf_data_valid) begin
+                    if (new_tag_set) begin
+                         next_state                    = S_STATUS_READ;
+                    end                    
+                    else if (rdf_data_valid) begin
                          next_state                    = S_DATA_READ;
                          pready_next                   = 1'b1;
                          rdf_data_req_next             = 1'b0;                         
@@ -206,7 +215,10 @@ module apb2axi_reg #(
                     end
                end
                S_DATA_READ: begin                                // Waiting for handler to supply rdf_data_valid
-                    if (psel && penable && !pwrite && sel_rd_data) begin
+                    if (new_tag_set) begin
+                         next_state                    = S_STATUS_READ;
+                    end                    
+                    else if (psel && penable && !pwrite && sel_rd_data) begin
                          if (rdf_data_valid) begin                    // This cycle completes the stalled APB transfer
                               pready_next = 1'b0;                     // Master will sample PRDATA in this cycle
                               if (rdf_data_last) begin

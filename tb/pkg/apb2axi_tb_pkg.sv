@@ -57,6 +57,7 @@ package apb2axi_tb_pkg;
      `include "tb/seq/apb2axi_read_bringup_seq.sv"
      `include "tb/seq/apb2axi_multiple_beat_read_seq.sv"
      `include "tb/seq/apb2axi_multiple_read_drain_seq.sv"
+     `include "tb/seq/apb2axi_reconsume_same_tag_seq.sv"
      `include "tb/seq/apb2axi_read_drain_seq.sv"
 
      // ======================================================
