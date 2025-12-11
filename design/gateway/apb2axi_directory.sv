@@ -28,7 +28,6 @@ module apb2axi_directory #(
      output logic                       dir_cpl_ready,
 
      input  logic                       dir_consumed_valid, // APB says: done with this TAG
-     input  logic [TAG_W_P-1:0]         dir_consumed_tag,
 
      input  logic [TAG_W_P-1:0]         status_tag_sel,   // which TAG to inspect
      output directory_entry_t           status_dir_entry,
@@ -44,6 +43,47 @@ module apb2axi_directory #(
 
      logic [TAG_W_P-1:0]                next_free_ptr;
      assign alloc_ready                 = (state[next_free_ptr] == ST_EMPTY);    // Free entry detection
+
+
+     // =============================================================
+     // DEBUG infra
+     // =============================================================
+     bit dir_debug_en;
+
+     initial begin
+          dir_debug_en = $test$plusargs("APB2AXI_DIR_DEBUG");
+          if (dir_debug_en)
+               $display("%t [DIR_DBG] Directory debug ENABLED (+APB2AXI_DIR_DEBUG)", $time);
+     end
+
+     function automatic string state2str(entry_state_e s);
+          case (s)
+               ST_EMPTY:     return "EMPTY   ";
+               ST_ALLOCATED: return "ALLOC   ";
+               ST_PENDING:   return "PENDING ";
+               ST_COMPLETE:  return "COMPLETE";
+               default:      return "UNKNOWN ";
+          endcase
+     endfunction
+
+     task automatic dir_dump(string reason = "");
+          if (!dir_debug_en) return;
+
+          $display("%t [DIR_DUMP] ---- Directory dump (%s) ----", $time, reason);
+          for (int i = 0; i < DIR_ENTRIES; i++) begin
+               $display("  idx=%0d state=%s tag=%0d addr=%h len=%0d size=%0d is_wr=%0b resp=%0d beats=%0d",
+                        i,
+                        state2str(state[i]),
+                        entry[i].tag,
+                        entry[i].addr,
+                        entry[i].len,
+                        entry[i].size,
+                        entry[i].is_write,
+                        entry[i].resp,
+                        entry[i].num_beats);
+          end
+          $display("%t [DIR_DUMP] ---------------------------------", $time);
+     endtask
 
      // =============================================================
      // ALLOCATION block
@@ -77,12 +117,25 @@ module apb2axi_directory #(
                     entry[dir_cpl_tag].state <= dir_cpl_error ? DIR_ST_ERROR : DIR_ST_DONE;
                     // dir_cpl_ready            <= '0;
                end
-               if (dir_consumed_valid & state[dir_consumed_tag] == ST_COMPLETE) begin
-                    state[dir_consumed_tag] <= ST_EMPTY;
-                    entry[dir_consumed_tag] <= '0;
+               if (dir_consumed_valid & state[status_tag_sel] == ST_COMPLETE) begin
+                    state[status_tag_sel] <= ST_EMPTY;
+                    entry[status_tag_sel] <= '0;
                end
           end
      end
+
+     // =============================================================
+     // PER-CYCLE DIRECTORY DUMP (when enabled)
+     // =============================================================
+     always_ff @(posedge pclk) begin
+          if (dir_debug_en) begin
+               if (!presetn)
+                    dir_dump("RESET");
+               else
+                    dir_dump("CYCLE");
+          end
+     end
+
      // =============================================================
      // POP block (ALLOCATED → PENDING)
      // Scan for oldest ALLOCATED entry
@@ -110,15 +163,6 @@ module apb2axi_directory #(
      status_dir_state = state[status_tag_sel];
      end
 
-     // Debug
-     // synthesis translate_off 
-     // always_ff @(posedge pclk) begin
-     //      if (dir_pop_valid && dir_pop_ready)          $display("%t [DIR] POP TAG=%0d addr=%h len=%0d size=%0d is_wr=%0b", $time, dir_pop_tag, entry[dir_pop_tag].addr, entry[dir_pop_tag].len, entry[dir_pop_tag].size, entry[dir_pop_tag].is_write);
-     //      if (dir_cpl_valid && dir_cpl_ready)          $display("%t [DIR] COMPLETE TAG=%0d wr=%0b err=%0b beats=%0d resp=%0d",$time, dir_cpl_tag,dir_cpl_is_write,dir_cpl_error,dir_cpl_num_beats,dir_cpl_resp);
-     //      if (alloc_valid && alloc_ready)              $display("%t [DIR] ALLOC TAG=%0d addr=%h len=%0d size=%0d is_wr=%0b", $time, alloc_tag, alloc_entry.addr, alloc_entry.len, alloc_entry.size, alloc_entry.is_write);
-     //      if (state[dir_consumed_tag] == ST_COMPLETE)  $display("%t [DIR] CONSUME TAG=%0d (SW done)", $time, dir_consumed_tag);
-     // end
-     // synthesis translate_on
 
 
 endmodule

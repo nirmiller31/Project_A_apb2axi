@@ -30,7 +30,8 @@ package apb2axi_pkg;
      // --------------------------------------------------
      // Maximum Beats per burst in our arcitecture
      // --------------------------------------------------
-     parameter int MAX_BEATS_NUM = 16;
+     parameter int MAX_BEATS_NUM   = 16;
+     parameter int FIFO_DEPTH      = 16;
      
      // --------------------------------------------------
      // APB register map (byte offsets)

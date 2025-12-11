@@ -2,7 +2,7 @@ import apb2axi_pkg::*;
 
 module apb2axi_fifo #(
     parameter int ENTRY_WIDTH = 64,
-    parameter int DEPTH       = 4          // must be >= 1
+    parameter int FIFO_DEPTH  = 16          // must be >= 1
 )(
     input  logic                   clk,
     input  logic                   resetn,
@@ -18,14 +18,14 @@ module apb2axi_fifo #(
     output logic [ENTRY_WIDTH-1:0] pop_data
 );
 
-    localparam int PTR_W = (DEPTH <= 1) ? 1 : $clog2(DEPTH);
+    localparam int PTR_W = (FIFO_DEPTH <= 1) ? 1 : $clog2(FIFO_DEPTH);
 
-    logic [ENTRY_WIDTH-1:0] mem [DEPTH];
+    logic [ENTRY_WIDTH-1:0] mem [FIFO_DEPTH];
     logic [PTR_W-1:0]       wptr, rptr;
-    logic [PTR_W:0]         count;    // can count up to DEPTH
+    logic [PTR_W:0]         count;    // can count up to FIFO_DEPTH
 
     // status
-    wire full  = (count == DEPTH);
+    wire full  = (count == FIFO_DEPTH);
     wire empty = (count == 0);
 
     assign push_ready = !full;

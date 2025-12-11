@@ -41,7 +41,7 @@ module apb2axi_reg #(
 
      // Ack back to Directory (SW consumed completion)
      output logic                  dir_consumed_valid,
-     output logic [TAG_W-1:0]      dir_consumed_tag,
+     // output logic [TAG_W-1:0]      dir_consumed_tag,
 
      output logic [TAG_W-1:0]      status_tag_sel,
      input directory_entry_t       status_dir_entry,
@@ -144,7 +144,7 @@ module apb2axi_reg #(
      logic rdf_data_req_next;
      logic [TAG_W-1:0] rdf_data_req_tag_next;
      logic dir_consumed_valid_next;
-     logic [TAG_W-1:0] dir_consumed_tag_next;
+     // logic [TAG_W-1:0] dir_consumed_tag_next;
 
      // ----------------------------------------------------------------
      // APB pready + RDF handshake + SW consume pulse  (FSM)
@@ -159,7 +159,6 @@ module apb2axi_reg #(
                rdf_data_req_tag    <= '0;
 
                dir_consumed_valid  <= 1'b0;
-               dir_consumed_tag    <= '0;
           end else begin
                state            <= next_state;
                armed_tag        <= armed_tag_next;
@@ -169,7 +168,6 @@ module apb2axi_reg #(
                rdf_data_req_tag <= rdf_data_req_tag_next;
 
                dir_consumed_valid <= dir_consumed_valid_next;
-               dir_consumed_tag   <= dir_consumed_tag_next;
           end
      end
 
@@ -188,22 +186,11 @@ module apb2axi_reg #(
           rdf_data_req_tag_next    = rdf_data_req_tag;
 
           dir_consumed_valid_next = 1'b0;
-          dir_consumed_tag_next   = dir_consumed_tag;
-
-          
-          // -------------------------------------------------
-          // STATUS READ: complete in 1 cycle, consume + arm
-          // -------------------------------------------------
-          if (psel && penable && !pwrite && sel_rd_status && rd_status_valid) begin
-               dir_consumed_valid_next  = 1'b1;
-               dir_consumed_tag_next    = rd_status_tag;
-          end
 
           // RD_DATA FSM
           unique case (state)
                S_IDLE: begin                                     // No outstanding RD_DATA transfer
                     if (psel && penable && pwrite && sel_tag_to_consume) begin
-                         // rdf_data_req_next             = 1'b1;
                          rdf_data_req_tag_next         = tag_to_consume_rd_val;
                          next_state                    = S_STATUS_READ;
                     end
@@ -229,7 +216,10 @@ module apb2axi_reg #(
                     if (psel && penable && !pwrite && sel_rd_data) begin
                          if (rdf_data_valid) begin                    // This cycle completes the stalled APB transfer
                               pready_next = 1'b0;                     // Master will sample PRDATA in this cycle
-                              if (rdf_data_last) next_state = S_IDLE; 
+                              if (rdf_data_last) begin
+                                   next_state = S_IDLE; 
+                                   dir_consumed_valid_next  = 1'b1;
+                              end
                               else begin 
                                    next_state = S_ARMED;
                                    rdf_data_req_next             = 1'b1;

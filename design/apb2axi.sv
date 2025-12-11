@@ -136,7 +136,6 @@ module apb2axi #(
 
      // From regfile to directory
      logic dir_cons_valid;
-     logic [TAG_W-1:0] dir_cons_tag;
 
      apb2axi_reg u_reg (
           .pclk(PCLK), .presetn(PRESETn),
@@ -162,7 +161,6 @@ module apb2axi #(
           .rdf_data_req_tag(rdf_data_req_tag),
 
           .dir_consumed_valid(dir_cons_valid),
-          .dir_consumed_tag(dir_cons_tag),
 
           .status_tag_sel(status_tag_sel),
           .status_dir_entry(status_dir_entry),
@@ -214,7 +212,6 @@ module apb2axi #(
 
           // APB CONSUME → EMPTY
           .dir_consumed_valid(dir_cons_valid),
-          .dir_consumed_tag(dir_cons_tag),
 
           .status_tag_sel(status_tag_sel),
           .status_dir_entry(status_dir_entry),
