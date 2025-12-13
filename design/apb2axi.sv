@@ -4,8 +4,6 @@
  * Author        : Nir Miller & Ido Oreg
  * Creation date : Nov 2025
  * Description   : Top-level APB2AXI bridge.
- *                 Current version connects the Gateway (APB-side)
- *                 and exposes a placeholder AXI master interface.
  *------------------------------------------------------------------------------*/
 
 import apb2axi_pkg::*;
@@ -83,9 +81,7 @@ module apb2axi #(
      output logic                  RREADY
 );
 
-     logic [TAG_W-1:0] status_tag_sel;
-     directory_entry_t status_dir_entry;
-     entry_state_e status_dir_state;
+
 
 
 
@@ -106,86 +102,64 @@ module apb2axi #(
      logic [COMPLETION_W-1:0] cq_pop_data;
 
      // =========================================================================
-     // 1. REGFILE
+     // Register File <-> Directory
      // =========================================================================
-     logic commit_pulse;
-     logic [AXI_ADDR_W-1:0] addr;
-     logic [7:0]            len;
-     logic [2:0]            size;
-     logic                  is_write;
+     logic                    reg_dir_alloc_vld;
+     directory_entry_t        reg_dir_alloc_entry;
+     logic                    reg_dir_alloc_ready;
+     logic                    reg_dir_entry_consumed;
+     logic [TAG_WIDTH-1:0]    reg_dir_tag_sel;
+     directory_entry_t        reg_dir_entry;
+     entry_state_e            reg_dir_entry_state;
+     // =========================================================================
+     // Directory <-> Transaction Manager
+     // =========================================================================
+     logic                    dir_mgr_pop_valid;
+     directory_entry_t        dir_mgr_pop_entry;     
+     logic                    dir_mgr_pop_ready;
+     // =========================================================================
+     // Response Handler <-> Directory
+     // =========================================================================
+     logic                    cq_dir_cpl_vld;
+     completion_entry_t       cq_dir_cpl_entry;
+     logic                    cq_dir_cpl_ready;
+     // =========================================================================
+     // Register File <-> Response Handler
+     // =========================================================================
+     logic                    rdf_reg_data_vld;
+     logic                    rdf_reg_data_ready;     
+     logic [APB_DATA_W-1:0]   rdf_reg_data_out;
+     logic                    rdf_reg_data_last;
+     logic                    rdf_reg_data_req;
+     logic [TAG_W-1:0]        rdf_reg_data_req_tag;
 
-     // From handler to regfile
-     logic rd_status_valid, rd_status_error, rd_status_is_write;
-     logic [1:0] rd_status_resp;
-     logic [TAG_W-1:0] rd_status_tag;
-     logic [7:0] rd_status_num_beats;
-     logic        rsp_data_req;
-     logic [TAG_W-1:0] rsp_data_req_tag;
-     logic        rsp_data_valid;
-     logic          rsp_data_ready;
-     logic [APB_DATA_W-1:0] rsp_data_out;
-     logic        rsp_data_last;
 
-     logic                  rdf_data_valid;
-     logic                  rdf_data_ready;
-     logic [APB_DATA_W-1:0] rdf_data_out;
-     logic                  rdf_data_last;
-
-     logic                  rdf_data_req;
-     logic [TAG_W-1:0]      rdf_data_req_tag;
-
-     // From regfile to directory
-     logic dir_cons_valid;
 
      // =========================================================================
-     // 2. DIRECTORY
+     // DIRECTORY
      // =========================================================================
-     logic dir_alloc_valid, dir_alloc_ready;
-     logic [TAG_W-1:0] dir_alloc_tag;
-     directory_entry_t dir_alloc_entry;
-
-     logic dir_pop_valid, dir_pop_ready;
-     directory_entry_t dir_pop_entry;
-     logic [TAG_W-1:0] dir_pop_tag;
-
-     // From handler
-     logic dir_cpl_valid, dir_cpl_ready;
-     logic [TAG_W-1:0] dir_cpl_tag;
-     logic dir_cpl_error, dir_cpl_is_write;
-     logic [1:0] dir_cpl_resp;
-     logic [7:0] dir_cpl_num_beats;
 
      apb2axi_directory u_directory (
           .pclk(PCLK), 
           .presetn(PRESETn),
 
-          // ALLOC
-          .alloc_valid(dir_alloc_valid),
-          .alloc_entry(dir_alloc_entry),
-          .alloc_ready(dir_alloc_ready),
-          .alloc_tag(dir_alloc_tag),
+          .reg_dir_alloc_vld(reg_dir_alloc_vld),
+          .reg_dir_alloc_entry(reg_dir_alloc_entry),
+          .reg_dir_alloc_ready(reg_dir_alloc_ready),
 
-          // POP → txn_mgr
-          .dir_pop_valid(dir_pop_valid),
-          .dir_pop_entry(dir_pop_entry),
-          .dir_pop_tag(dir_pop_tag),
-          .dir_pop_ready(dir_pop_ready),
+          .reg_dir_entry_consumed(reg_dir_entry_consumed),
 
-          // COMPLETION → COMPLETE
-          .dir_cpl_valid(dir_cpl_valid),
-          .dir_cpl_tag(dir_cpl_tag),
-          .dir_cpl_is_write(dir_cpl_is_write),
-          .dir_cpl_error(dir_cpl_error),
-          .dir_cpl_resp(dir_cpl_resp),
-          .dir_cpl_num_beats(dir_cpl_num_beats),
-          .dir_cpl_ready(dir_cpl_ready),
+          .reg_dir_tag_sel(reg_dir_tag_sel),
+          .reg_dir_entry(reg_dir_entry),
+          .reg_dir_entry_state(reg_dir_entry_state),
 
-          // APB CONSUME → EMPTY
-          .dir_consumed_valid(dir_cons_valid),
+          .dir_mgr_pop_valid(dir_mgr_pop_valid),
+          .dir_mgr_pop_entry(dir_mgr_pop_entry),
+          .dir_mgr_pop_ready(dir_mgr_pop_ready),
 
-          .status_tag_sel(status_tag_sel),
-          .status_dir_entry(status_dir_entry),
-          .status_dir_state(status_dir_state)
+          .cq_dir_cpl_vld(cq_dir_cpl_vld),
+          .cq_dir_cpl_entry(cq_dir_cpl_entry),
+          .cq_dir_cpl_ready(cq_dir_cpl_ready)
      );
 
      apb2axi_reg u_reg (
@@ -200,33 +174,26 @@ module apb2axi #(
           .pready(PREADY), 
           .pslverr(PSLVERR),
 
-          .commit_pulse(commit_pulse),
-          .dir_alloc_entry(dir_alloc_entry),
+          .reg_dir_alloc_vld(reg_dir_alloc_vld),
+          .reg_dir_alloc_entry(reg_dir_alloc_entry),
 
-          .rd_status_valid(rd_status_valid),
-          .rd_status_error(rd_status_error),
-          .rd_status_resp(rd_status_resp),
-          .rd_status_tag(rd_status_tag),
-          .rd_status_num_beats(rd_status_num_beats),
-          .rd_status_is_write(rd_status_is_write),
+          .rdf_reg_data_vld(rdf_reg_data_vld),
+          .rdf_reg_data_ready(rdf_reg_data_ready),
+          .rdf_reg_data_out(rdf_reg_data_out),
+          .rdf_reg_data_last(rdf_reg_data_last),
+          .rdf_reg_data_req(rdf_reg_data_req),
+          .rdf_reg_data_req_tag(rdf_reg_data_req_tag),
 
-          .rdf_data_valid(rdf_data_valid),
-          .rdf_data_ready(rdf_data_ready),
-          .rdf_data_out(rdf_data_out),
-          .rdf_data_last(rdf_data_last),
-          .rdf_data_req(rdf_data_req),
-          .rdf_data_req_tag(rdf_data_req_tag),
+          .reg_dir_entry_consumed(reg_dir_entry_consumed),
 
-          .dir_consumed_valid(dir_cons_valid),
-
-          .status_tag_sel(status_tag_sel),
-          .status_dir_entry(status_dir_entry),
-          .status_dir_state(status_dir_state)
+          .reg_dir_tag_sel(reg_dir_tag_sel),
+          .reg_dir_entry(reg_dir_entry),
+          .reg_dir_entry_state(reg_dir_entry_state)
      );
 
-     always_comb begin
-          dir_alloc_valid           = commit_pulse;
-     end
+     // always_comb begin
+     //      dir_alloc_valid           = reg_dir_alloc_vld;
+     // end
 
      // ============================================================
      // Internal wiring for Write FIFO
@@ -372,10 +339,9 @@ module apb2axi #(
           .aclk          (ACLK),
           .aresetn       (ARESETn),
 
-          .pending_valid (dir_pop_valid),
-          .pending_entry (dir_pop_entry),
-          .pending_tag   (dir_pop_tag),
-          .pending_pop   (dir_pop_ready),
+          .pending_valid (dir_mgr_pop_valid),
+          .pending_entry (dir_mgr_pop_entry),
+          .pending_pop   (dir_mgr_pop_ready),
 
           .wr_push_valid (wr_push_valid),
           .wr_push_ready (wr_push_ready),
@@ -412,7 +378,7 @@ module apb2axi #(
 
      apb2axi_response_collector #(
           .AXI_ID_W      (AXI_ID_W),
-          .TAG_W_P       (TAG_W),
+          .TAG_W_P       (TAG_WIDTH),
           .COMPLETION_WP (COMPLETION_W)
      ) u_resp_collector (
           .aclk          (ACLK),
@@ -460,39 +426,18 @@ module apb2axi #(
           .cq_pop_ready(cq_pop_ready),
 
           // APB drain
-          .data_req(rsp_data_req),
-          .data_req_tag(rsp_data_req_tag),
-          .data_ready(rsp_data_ready),
-          .data_valid(rsp_data_valid),
-          .data_out(rsp_data_out),
-          .data_last(rsp_data_last),
+          .data_req(rdf_reg_data_req),
+          .data_req_tag(rdf_reg_data_req_tag),
+          .data_ready(rdf_reg_data_ready),
+          .data_valid(rdf_reg_data_vld),
+          .data_out(rdf_reg_data_out),
+          .data_last(rdf_reg_data_last),
 
           // Directory completion
-          .dir_cpl_valid(dir_cpl_valid),
-          .dir_cpl_tag(dir_cpl_tag),
-          .dir_cpl_is_write(dir_cpl_is_write),
-          .dir_cpl_resp(dir_cpl_resp),
-          .dir_cpl_error(dir_cpl_error),
-          .dir_cpl_num_beats(dir_cpl_num_beats),
-          .dir_cpl_ready(1'b1),
-
-          // Regfile completion
-          .rd_status_valid(rd_status_valid),
-          .rd_status_tag(rd_status_tag),
-          .rd_status_num_beats(rd_status_num_beats),
-          .rd_status_resp(rd_status_resp),
-          .rd_status_error(rd_status_error),
-          .rd_status_ready(1'b1)
+          .cq_dir_cpl_vld(cq_dir_cpl_vld),
+          .cq_dir_cpl_entry(cq_dir_cpl_entry),
+          .cq_dir_cpl_ready(cq_dir_cpl_ready)
      );
-
-     // Bridge regfile <-> handler RDF signals (same clock domain: PCLK)
-     assign rsp_data_req      = rdf_data_req;
-     assign rsp_data_req_tag  = rdf_data_req_tag;
-
-     assign rdf_data_valid    = rsp_data_valid;
-     assign rsp_data_ready    = rdf_data_ready;
-     assign rdf_data_out      = rsp_data_out;
-     assign rdf_data_last     = rsp_data_last;
 
      apb2axi_fifo_async #(
           .WIDTH($bits(rdf_entry_t))

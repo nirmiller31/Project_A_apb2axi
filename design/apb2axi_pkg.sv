@@ -23,7 +23,8 @@ package apb2axi_pkg;
      // Gateway / Directory sizing
      // --------------------------------------------------
      parameter int TAG_NUM         = 16;        // number of outstanding transactions
-     parameter int TAG_W           = (TAG_NUM <= 1) ? 1 : $clog2(TAG_NUM);
+     parameter int TAG_WIDTH       = (TAG_NUM <= 1) ? 1 : $clog2(TAG_NUM);
+     parameter int TAG_W       = (TAG_NUM <= 1) ? 1 : $clog2(TAG_NUM);     
      parameter int N_TAG           = (1 << TAG_W);
      parameter int DIR_ENTRIES     = (1 << TAG_W);
 

@@ -2,36 +2,28 @@
 
 import apb2axi_pkg::*;
 
-module apb2axi_directory #(
-     parameter int TAG_NUM_P = TAG_NUM,
-     parameter int TAG_W_P   = TAG_W
-)(
+module apb2axi_directory #()(
      input  logic                       pclk,
      input  logic                       presetn,
 
-     input  logic                       alloc_valid,       // new descriptor available
-     input  directory_entry_t           alloc_entry,       // descriptor
-     output logic                       alloc_ready,       // can accept?
-     output logic [TAG_W_P-1:0]         alloc_tag,         // assigned TAG
-     // txn_mgr signals
-     output logic                       dir_pop_valid,
-     output directory_entry_t           dir_pop_entry,
-     output logic [TAG_W_P-1:0]         dir_pop_tag,
-     input  logic                       dir_pop_ready,
+     input  logic                       reg_dir_alloc_vld,            // new descriptor available
+     input  directory_entry_t           reg_dir_alloc_entry,          // descriptor
+     output logic                       reg_dir_alloc_ready,          // can accept?
 
-     input  logic                       dir_cpl_valid,
-     input  logic [TAG_W_P-1:0]         dir_cpl_tag,
-     input  logic                       dir_cpl_is_write,
-     input  logic                       dir_cpl_error,
-     input  logic [1:0]                 dir_cpl_resp,
-     input  logic [7:0]                 dir_cpl_num_beats,
-     output logic                       dir_cpl_ready,
+     input  logic                       reg_dir_entry_consumed,       // APB says: done with this TAG (consumed)
 
-     input  logic                       dir_consumed_valid, // APB says: done with this TAG
+     input  logic [TAG_WIDTH-1:0]       reg_dir_tag_sel,               // which TAG to inspect (status read)
+     output directory_entry_t           reg_dir_entry,
+     output entry_state_e               reg_dir_entry_state,
 
-     input  logic [TAG_W_P-1:0]         status_tag_sel,   // which TAG to inspect
-     output directory_entry_t           status_dir_entry,
-     output entry_state_e               status_dir_state
+     output logic                       dir_mgr_pop_valid,            // We have an entry ready to FIFO'ed
+     output directory_entry_t           dir_mgr_pop_entry,            // The ready entry
+     input  logic                       dir_mgr_pop_ready,            // FIFO can accept
+
+     input  logic                       cq_dir_cpl_vld,               // Txn stored in handler, all beats recieved from AXI
+     input  completion_entry_t          cq_dir_cpl_entry,             // The completion entry
+     output logic                       cq_dir_cpl_ready
+
 );
 
      // =============================================================
@@ -41,13 +33,76 @@ module apb2axi_directory #(
      entry_state_e                      state [DIR_ENTRIES];
      directory_entry_t                  entry [DIR_ENTRIES];
 
-     logic [TAG_W_P-1:0]                next_free_ptr;
-     assign alloc_ready                 = (state[next_free_ptr] == ST_EMPTY);    // Free entry detection
+     logic                              found_alloc;
+     logic [TAG_WIDTH-1:0]              oldest_tag;
 
+     logic [TAG_WIDTH-1:0]              next_free_ptr;
+
+     always_comb begin
+          reg_dir_alloc_ready           = (state[next_free_ptr] == ST_EMPTY);    // Free entry detection
+
+          dir_mgr_pop_valid             = found_alloc;
+          dir_mgr_pop_entry             = entry[oldest_tag];
+
+          reg_dir_entry                 = entry[reg_dir_tag_sel];
+          reg_dir_entry_state           = state[reg_dir_tag_sel];
+     end
 
      // =============================================================
-     // DEBUG infra
+     // State Handling block
      // =============================================================
+     always_ff @(posedge pclk) begin
+          if (!presetn) begin
+               next_free_ptr                                <= '0;
+               cq_dir_cpl_ready                             <= '1;
+               for (int i = 0; i < DIR_ENTRIES; i++) begin
+                    state[i]                                <= ST_EMPTY;
+                    entry[i]                                <= '0;
+               end
+          end
+          else begin
+               if (reg_dir_alloc_vld && reg_dir_alloc_ready) begin                        // EMPTY -> ALLOCATED (commited vie regs)
+                    entry[next_free_ptr]                    <= reg_dir_alloc_entry;
+                    entry[next_free_ptr].tag                <= next_free_ptr;
+                    state[next_free_ptr]                    <= ST_ALLOCATED;
+                    next_free_ptr                           <= next_free_ptr + 1'b1;
+               end
+               if (dir_mgr_pop_valid && dir_mgr_pop_ready) begin                          // ALLOCATED -> PENDING (once popped to FIFO)
+                    state[oldest_tag]                       <= ST_PENDING;
+               end
+               if (cq_dir_cpl_vld && cq_dir_cpl_ready) begin
+                    state[cq_dir_cpl_entry.tag]             <= ST_COMPLETE;               // PENDING -> COMPLETE (after all data recieved)
+                    entry[cq_dir_cpl_entry.tag].resp        <= cq_dir_cpl_entry.resp;
+                    entry[cq_dir_cpl_entry.tag].num_beats   <= cq_dir_cpl_entry.num_beats;
+                    entry[cq_dir_cpl_entry.tag].state       <= cq_dir_cpl_entry.error ? DIR_ST_ERROR : DIR_ST_DONE;
+               end
+               if (reg_dir_entry_consumed & state[reg_dir_tag_sel] == ST_COMPLETE) begin  // COMPLETE -> EMPTY (all consumed, can be cleared)
+                    state[reg_dir_tag_sel]                  <= ST_EMPTY;
+                    entry[reg_dir_tag_sel]                  <= '0;
+               end
+          end
+     end
+
+     // =============================================================
+     // POP block (ALLOCATED -> PENDING)
+     // Scan for oldest ALLOCATED entry
+     // =============================================================
+     always_comb begin
+          found_alloc                   = 1'b0;
+          oldest_tag                    = '0;
+          for (int i = 0; i < DIR_ENTRIES; i++) begin       // Simple linear scan for now
+               if (state[i] == ST_ALLOCATED && !found_alloc) begin
+                    found_alloc         = 1'b1;
+                    oldest_tag          = i;
+               end
+          end
+     end
+
+
+// ==========================================================================================================================
+// =================================================== DEBUG infra ==========================================================
+// ==========================================================================================================================
+
      bit dir_debug_en;
 
      initial begin
@@ -86,45 +141,6 @@ module apb2axi_directory #(
      endtask
 
      // =============================================================
-     // ALLOCATION block
-     // =============================================================
-     always_ff @(posedge pclk) begin
-          if (!presetn) begin
-               next_free_ptr <= '0;
-               alloc_tag     <= '0;
-               dir_cpl_ready       <= '1;
-               for (int i = 0; i < DIR_ENTRIES; i++) begin
-                    state[i] <= ST_EMPTY;
-                    entry[i] <= '0;
-               end
-          end
-          else begin
-               next_free_ptr <= next_free_ptr;
-               if (alloc_valid && alloc_ready) begin
-                    entry[next_free_ptr]     <= alloc_entry;
-                    entry[next_free_ptr].tag <= next_free_ptr;
-                    state[next_free_ptr]     <= ST_ALLOCATED;
-                    alloc_tag                <= next_free_ptr;
-                    next_free_ptr            <= next_free_ptr + 1'b1;       // Move to next slot (simple round robin)
-               end
-               if (dir_pop_valid && dir_pop_ready) begin
-                    state[dir_pop_tag]  <= ST_PENDING;
-               end
-               if (dir_cpl_valid && dir_cpl_ready) begin
-                    state[dir_cpl_tag]       <= ST_COMPLETE;
-                    entry[dir_cpl_tag].resp  <= dir_cpl_resp;
-                    entry[dir_cpl_tag].num_beats <= dir_cpl_num_beats;
-                    entry[dir_cpl_tag].state <= dir_cpl_error ? DIR_ST_ERROR : DIR_ST_DONE;
-                    // dir_cpl_ready            <= '0;
-               end
-               if (dir_consumed_valid & state[status_tag_sel] == ST_COMPLETE) begin
-                    state[status_tag_sel] <= ST_EMPTY;
-                    entry[status_tag_sel] <= '0;
-               end
-          end
-     end
-
-     // =============================================================
      // PER-CYCLE DIRECTORY DUMP (when enabled)
      // =============================================================
      always_ff @(posedge pclk) begin
@@ -136,32 +152,9 @@ module apb2axi_directory #(
           end
      end
 
-     // =============================================================
-     // POP block (ALLOCATED → PENDING)
-     // Scan for oldest ALLOCATED entry
-     // =============================================================
-     logic                   found_alloc;
-     logic [TAG_W_P-1:0]     oldest_tag;
-
-     always_comb begin
-          found_alloc = 1'b0;
-          oldest_tag  = '0;
-          for (int i = 0; i < DIR_ENTRIES; i++) begin                // Simple linear scan
-               if (state[i] == ST_ALLOCATED && !found_alloc) begin
-                    found_alloc = 1'b1;
-                    oldest_tag  = i;
-               end
-          end
-     end
-
-     assign dir_pop_valid = found_alloc;
-     assign dir_pop_entry = entry[oldest_tag];
-     assign dir_pop_tag   = oldest_tag;
-
-     always_comb begin
-     status_dir_entry = entry[status_tag_sel];
-     status_dir_state = state[status_tag_sel];
-     end
+// ==========================================================================================================================
+// ==========================================================================================================================
+// ==========================================================================================================================
 
 
 

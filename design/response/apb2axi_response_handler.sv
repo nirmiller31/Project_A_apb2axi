@@ -30,21 +30,10 @@ module apb2axi_response_handler #(
     output logic                data_last,
 
     // Directory completion
-    output logic                dir_cpl_valid,
-    output logic [TAG_W-1:0]    dir_cpl_tag,
-    output logic                dir_cpl_is_write,
-    output logic [1:0]          dir_cpl_resp,
-    output logic                dir_cpl_error,
-    output logic [7:0]          dir_cpl_num_beats,
-    input  logic                dir_cpl_ready,
+    output logic                cq_dir_cpl_vld,
+    output completion_entry_t   cq_dir_cpl_entry,
+    input  logic                cq_dir_cpl_ready
 
-    // Regfile status
-    output logic                rd_status_valid,
-    output logic [TAG_W-1:0]    rd_status_tag,
-    output logic [7:0]          rd_status_num_beats,
-    output logic [1:0]          rd_status_resp,
-    output logic                rd_status_error,
-    input  logic                rd_status_ready
 );
 
     // ======================================================================
@@ -70,71 +59,28 @@ module apb2axi_response_handler #(
     logic [$clog2(TAG_DEPTH+1)-1:0] count [N_TAG]; //////////////////////////////////////////// CHANGE =====================================
 
     // ======================================================================
-    // BLOCK A — Completion (CQ → DIR + REGS)
+    // Completion Indicator (for the Directory)
     // ======================================================================
     always_ff @(posedge pclk) begin
         if (!presetn) begin
-            cq_pop_ready    <= 1'b0;
-            dir_cpl_valid   <= 1'b0;
-            rd_status_valid <= 1'b0;
+            cq_pop_ready                    <= 1'b0;
+            cq_dir_cpl_vld               <= 1'b0;
         end else begin
-            cq_pop_ready <= dir_cpl_ready;
-
-            dir_cpl_valid <= 1'b0;
-
+            completion_entry_t cq_cpl;
+            cq_cpl = cq_pop_data;
+            cq_pop_ready                    <= cq_dir_cpl_ready;
+            cq_dir_cpl_vld               <= 1'b0;
+            
             if (cq_pop_valid && cq_pop_ready) begin
-                completion_entry_t cpl;
-                cpl = cq_pop_data;
 
-                // → Directory
-                dir_cpl_valid     <= 1'b1;
-                dir_cpl_tag       <= cpl.tag;
-                dir_cpl_is_write  <= cpl.is_write;
-                dir_cpl_resp      <= cpl.resp;
-                dir_cpl_error     <= cpl.error;
-                dir_cpl_num_beats <= cpl.num_beats;
-
-                // → Regfile only for *reads*
-                if (!cpl.is_write) begin
-                    rd_status_valid     <= 1'b1;
-                    rd_status_tag       <= cpl.tag;
-                    rd_status_resp      <= cpl.resp;
-                    rd_status_error     <= cpl.error;
-                    rd_status_num_beats <= cpl.num_beats;
-                end
-            end
+                cq_dir_cpl_vld           <= 1'b1;
+                cq_dir_cpl_entry         <= cq_cpl;
+            end      
         end
     end
 
-
-    // ======================================================================
-    // BLOCK B — RDF ingest (AXI → handler)
-    // ======================================================================
-
-    // STALL AXI if tag FIFO is FULL ////////////////////////////////////////////////////// CHANGE =====================================
-    assign rdf_pop_ready = (count[rdf_pop_payload.tag] < TAG_DEPTH); //////////////////////////////////////////// CHANGE =====================================
-
-    // always_ff @(posedge pclk) begin
-    //     if (!presetn) begin
-    //         for (int t=0; t<N_TAG; t++) begin
-    //             head[t]  <= '0;
-    //             tail[t]  <= '0;
-    //             count[t] <= '0;
-    //         end
-    //     end else begin
-    //         if (rdf_pop_valid && rdf_pop_ready) begin
-    //             int tg = rdf_pop_payload.tag;
-
-    //             tag_mem[tg][tail[tg]].data = rdf_pop_payload.data;
-    //             tag_mem[tg][tail[tg]].resp = rdf_pop_payload.resp;
-    //             tag_mem[tg][tail[tg]].last = rdf_pop_payload.last;
-
-    //             tail[tg]  <= tail[tg] + 1'b1;
-    //             count[tg] <= count[tg] + 1'b1;
-    //         end
-    //     end
-    // end
-
+    // STALL AXI if tag FIFO is FULL
+    assign rdf_pop_ready = (count[rdf_pop_payload.tag] < TAG_DEPTH);
 
     // ======================================================================
     // BLOCK C — APB slicing: read 32-bit words
@@ -164,9 +110,6 @@ module apb2axi_response_handler #(
             data_valid <= 1'b0;
             data_last  <= 1'b0;
         end else begin
-            // defaults
-            // data_valid <= 1'b0;
-            // data_last  <= 1'b0;
 
             tag_idx = data_req_tag;
 

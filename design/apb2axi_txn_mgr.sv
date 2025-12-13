@@ -20,7 +20,6 @@ module apb2axi_txn_mgr #(
      // From Gateway (directory entry at commit time)
      input  logic                       pending_valid,
      input  directory_entry_t           pending_entry,
-     input  logic [TAG_W-1:0]           pending_tag,
      output logic                       pending_pop,
 
      // To WRITE request FIFO
@@ -75,7 +74,7 @@ module apb2axi_txn_mgr #(
      // synthesis translate_off
      always_ff @(posedge aclk) begin
           if (pending_valid && pending_pop) begin
-               $display("%t [TXN_MGR] TAG=%0d -> %s FIFO", $time, pending_tag, pending_entry.is_write ? "WR" : "RD");
+               $display("%t [TXN_MGR] %s FIFO", $time, pending_entry.is_write ? "WR" : "RD");
           end
           if (pending_valid && !pending_pop) begin
                $display("%t [TXN_MGR] BLOCKED pending_valid=1 is_write=%0b wr_ready=%0b rd_ready=%0b", $time, pending_entry.is_write, wr_push_ready, rd_push_ready);

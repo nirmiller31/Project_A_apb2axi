@@ -22,8 +22,8 @@
 # RTL / Design files
 # ============================================================
 $PROJECT_HOME/design/apb2axi_pkg.sv
-$PROJECT_HOME/design/apb_if.sv
-$PROJECT_HOME/design/axi_if.sv
+$PROJECT_HOME/design/if/apb_if.sv
+$PROJECT_HOME/design/if/axi_if.sv
 $PROJECT_HOME/design/gateway/apb2axi_reg.sv
 $PROJECT_HOME/design/gateway/apb2axi_directory.sv
 // $PROJECT_HOME/design/gateway/apb2axi_gateway.sv
