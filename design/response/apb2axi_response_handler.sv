@@ -184,7 +184,7 @@ module apb2axi_response_handler #(
 
             if(data_ready && data_valid) data_valid <= 1'b0;
             if(data_ready && data_valid) data_last  <= 1'b0;
-
+            // FIXME consider adding error incidation when MEM saturates
             if (data_req) begin
                 if (!cur_valid[tag_idx]) begin
                     if (count[tag_idx] > 0) begin

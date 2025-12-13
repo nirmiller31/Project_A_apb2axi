@@ -9,8 +9,8 @@
 //   * Real memory model
 //------------------------------------------------------------------------------
 // Modes:
-//   - linear (default)            : AR handled immediately (blocking do_read)
-//   - outstanding (+OUTSTANDING_READS)
+//   - refular (default)
+//   - outstanding (+LINEAR_OUTSTANDING)
 //   - extreme    (+EXTREME_OUTSTANDING)
 //------------------------------------------------------------------------------
 
@@ -32,11 +32,11 @@ class axi3_slave_bfm extends uvm_component;
      // ------------------------------------------------------------
      // Read mode
      // ------------------------------------------------------------
-     typedef enum int { MODE_LINEAR = 0,
+     typedef enum int { MODE_REGULAR = 0,
                          MODE_OUTSTANDING = 1,
                          MODE_EXTREME = 2 } read_mode_e;
 
-     read_mode_e read_mode = MODE_LINEAR;
+     read_mode_e read_mode = MODE_REGULAR;
 
      // ------------------------------------------------------------
      // Queue for outstanding reads (extreme)
@@ -92,12 +92,12 @@ class axi3_slave_bfm extends uvm_component;
                read_mode = MODE_EXTREME;
                `uvm_info("AXI3_BFM", "Read mode: EXTREME_OUTSTANDING", UVM_NONE)
           end
-          else if ($test$plusargs("OUTSTANDING_READS")) begin
+          else if ($test$plusargs("LINEAR_OUTSTANDING")) begin
                read_mode = MODE_OUTSTANDING;
-               `uvm_info("AXI3_BFM", "Read mode: OUTSTANDING_READS", UVM_NONE)
+               `uvm_info("AXI3_BFM", "Read mode: LINEAR_OUTSTANDING", UVM_NONE)
           end
           else begin
-               read_mode = MODE_LINEAR;
+               read_mode = MODE_REGULAR;
                `uvm_info("AXI3_BFM", "Read mode: LINEAR (default)", UVM_NONE)
           end
      endfunction
@@ -126,8 +126,15 @@ class axi3_slave_bfm extends uvm_component;
                if (active_reads.size() == 0)
                     continue;
 
+               // Scheduling policy
+               case (read_mode)
+                    MODE_REGULAR:       idx = 0;
+                    MODE_OUTSTANDING:  idx = 0;
+                    MODE_EXTREME:      idx = $urandom_range(0, active_reads.size()-1);
+               endcase
+
                // Pick a random outstanding burst
-               idx = $urandom_range(0, active_reads.size()-1);
+               // idx = $urandom_range(0, active_reads.size()-1);
                ar = active_reads[idx];
 
                // RANDOM latency before issuing the beat (optional)
@@ -139,7 +146,7 @@ class axi3_slave_bfm extends uvm_component;
                else
                     rdata = '0;
 
-                    `uvm_info("AXI3_BFM", $sformatf("TOOK READ: idx=0x%0d rdata=%0h", idx, rdata), UVM_NONE)
+                    `uvm_info("AXI3_BFM", $sformatf("TOOK READ: id=%d, idx=0x%0d rdata=%0h", ar.id, idx, rdata), UVM_NONE)
 
                vif.RID    <= ar.id;
                vif.RDATA  <= rdata;
@@ -147,11 +154,17 @@ class axi3_slave_bfm extends uvm_component;
                vif.RLAST  <= (ar.beats_left == 1);
                vif.RVALID <= 1'b1;
 
+               $display("%t BFM_DRIVE_R rid=%0d rlast=%0b rvalid=%0b", $time, ar.id, (ar.beats_left == 1), vif.RVALID);
+
                // Wait for RREADY
                do @(posedge vif.ACLK);
                while (!vif.RREADY && vif.ARESETn);
 
                vif.RVALID <= 0;
+
+               beat_order_q.push_back(ar.id);
+
+               if (ar.beats_left == 1) burst_order_q.push_back(ar.id);
 
                // ======== UPDATE STATE ========
                // Move memory pointer
@@ -173,7 +186,6 @@ class axi3_slave_bfm extends uvm_component;
      // ------------------------------------------------------------
      task run_phase(uvm_phase phase);
           active_read_t arx;
-          phase.raise_objection(this);
 
           init_mem();
 
@@ -192,11 +204,9 @@ class axi3_slave_bfm extends uvm_component;
 
           `uvm_info("AXI3_BFM","BFM is alive and ready", UVM_NONE)
 
-          if (read_mode == MODE_EXTREME) begin         // Start R driver for outstanding modes
-               fork
-                    drive_read_queue();
-               join_none
-          end
+          fork
+               drive_read_queue();
+          join_none
 
           forever begin
                @(posedge vif.ACLK);
@@ -210,44 +220,32 @@ class axi3_slave_bfm extends uvm_component;
 
                // ========= READ ADDRESS =========
                if (vif.ARVALID && vif.ARREADY) begin
-                    automatic read_req_t req;
-                    req.addr            = vif.ARADDR;
-                    req.len             = vif.ARLEN;
-                    req.size            = vif.ARSIZE;
-                    req.id              = vif.ARID;
-                    req.burst           = vif.ARBURST;
-`uvm_info("AXI3_BFM",
-  $sformatf("AR HANDSHAKE: id=%0d addr=0x%0h len=%0d time=%0t",
-            req.id, req.addr, req.len, $time),
-  UVM_NONE)
+                    active_read_t arx;
+
+                    arx.addr       = vif.ARADDR;
+                    arx.beats_left = vif.ARLEN + 1;
+                    arx.size       = vif.ARSIZE;
+                    arx.id         = vif.ARID;
+                    arx.burst      = vif.ARBURST;
+                    arx.mem_idx    = addr2idx(vif.ARADDR);
+
                     case (read_mode)
-                    MODE_LINEAR: begin
-                        
-                        do_read(req.addr, req.len, req.size, req.id, req.burst);
-                    end
+                         MODE_REGULAR: begin
+                              // Allow only one outstanding
+                              wait (active_reads.size() == 0);
+                              active_reads.push_back(arx);
+                         end
 
-                    MODE_OUTSTANDING: begin
-                         fork
-                              begin
-                                   // repeat ($urandom_range(0,10)) @(posedge vif.ACLK);
-                                   do_read(req.addr, req.len, req.size, req.id, req.burst);
-                              end
-                         join_none
-                    end
-                    MODE_EXTREME: begin
-                         arx.addr       = req.addr;
-                         arx.beats_left = req.len + 1;
-                         arx.size       = req.size;
-                         arx.id         = req.id;
-                         arx.burst      = req.burst;
+                         MODE_OUTSTANDING: begin
+                              // Multiple outstanding, but ordered issue
+                              active_reads.push_back(arx);
+                         end
 
-                         arx.mem_idx = addr2idx(req.addr);
-
-
-                         `uvm_info("AXI3_BFM", $sformatf("PUSHING READ: addr=0x%0h beats=%0d size=%0d id=%0d, idx=%d", arx.addr, arx.beats_left, arx.size, arx.id, arx.mem_idx), UVM_MEDIUM)
-                         active_reads.push_back(arx);                    
-                    end
-                endcase
+                         MODE_EXTREME: begin
+                              // Same as outstanding, scheduling handled later
+                              active_reads.push_back(arx);
+                         end
+                    endcase
 
             end
 
@@ -265,63 +263,6 @@ class axi3_slave_bfm extends uvm_component;
                end
           end
 
-          phase.drop_objection(this);
-     endtask
-
-
-     // ------------------------------------------------------------
-     // READ handler (multi-beat)
-     // ------------------------------------------------------------
-     task automatic do_read(
-          logic [AXI_ADDR_W-1:0]  araddr,
-          logic [3:0]             arlen,
-          logic [2:0]             arsize,
-          logic [AXI_ID_W-1:0]    arid,
-          logic [1:0]             arburst
-     );
-          int unsigned            idx;
-          mem_word_t              rdata;
-
-          int unsigned beats          = arlen + 1;
-          int unsigned bytes_per_beat = (1 << arsize);
-
-          idx = addr2idx(araddr);
-
-          `uvm_info("AXI3_BFM", $sformatf("READ: addr=0x%0h beats=%0d size=%0d id=%0d", araddr, beats, bytes_per_beat, arid), UVM_MEDIUM)
-
-          vif.RVALID <= 1'b0;
-          vif.RLAST  <= 1'b0;
-
-          for (int i = 0; i < beats; i++) begin
-
-               if (idx < MEM_WORDS)
-                    rdata = MEM[idx];
-               else
-                    rdata = '0;            
-
-               @(posedge vif.ACLK);
-               vif.RID    <= arid;
-               vif.RDATA  <= rdata;
-               vif.RRESP  <= 2'b00;            // OKAY, simulate later
-               vif.RLAST  <= (i == beats-1);
-               vif.RVALID <= 1'b1;
-
-               // Backpressure-safe wait
-               do @(posedge vif.ACLK);
-               while (!vif.RREADY && vif.ARESETn);
-
-               vif.RVALID <= 1'b0;
-
-               if (read_mode != MODE_LINEAR) begin
-                    beat_order_q.push_back(arid);
-                    if (i == beats-1) burst_order_q.push_back(arid);
-               end
-
-               if (arburst == 2'b01) begin // INCR
-                    idx++;
-               end
-          end
-          vif.RLAST <= 0;
      endtask
 
 

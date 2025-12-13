@@ -26,13 +26,14 @@ $PROJECT_HOME/design/apb_if.sv
 $PROJECT_HOME/design/axi_if.sv
 $PROJECT_HOME/design/gateway/apb2axi_reg.sv
 $PROJECT_HOME/design/gateway/apb2axi_directory.sv
-$PROJECT_HOME/design/gateway/apb2axi_gateway.sv
+// $PROJECT_HOME/design/gateway/apb2axi_gateway.sv
 $PROJECT_HOME/design/apb2axi_fifo.sv
+$PROJECT_HOME/design/apb2axi_fifo_async.sv
 $PROJECT_HOME/design/builder/apb2axi_write_builder.sv
 $PROJECT_HOME/design/builder/apb2axi_read_builder.sv
 $PROJECT_HOME/design/response/apb2axi_response_collector.sv
 $PROJECT_HOME/design/response/apb2axi_response_handler.sv
-$PROJECT_HOME/design/response/apb2axi_rdf.sv
+// $PROJECT_HOME/design/response/apb2axi_rdf.sv
 $PROJECT_HOME/design/apb2axi_txn_mgr.sv
 $PROJECT_HOME/design/apb2axi.sv
 
@@ -41,6 +42,7 @@ $PROJECT_HOME/design/apb2axi.sv
 // $PROJECT_HOME/tb/if/axi_if.sv      # bringup used
 
 # === Test-Bench Package ===
+$PROJECT_HOME/tb/bfm/apb2axi_memory_pkg.sv
 $PROJECT_HOME/tb/pkg/apb2axi_tb_pkg.sv
 
 # === Bringup DUT ===         to be later commented

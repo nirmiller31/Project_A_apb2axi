@@ -24,6 +24,9 @@ class apb2axi_base_seq extends uvm_sequence #(apb_seq_item);
 
      task body();
 
+          uvm_phase phase = get_starting_phase();
+          if (phase != null) phase.raise_objection(this);
+
           `uvm_info("BASE_SEQ", "Entered body() of base APB2AXI sequence", apb2axi_verbosity)
 
           // // Example: issue 5 APB transactions
@@ -39,6 +42,8 @@ class apb2axi_base_seq extends uvm_sequence #(apb_seq_item);
           // end
 
           `uvm_info("BASE_SEQ", "Sequence completed successfully", apb2axi_verbosity)
+
+          if (phase != null) phase.drop_objection(this);
      endtask
 
      // ---------------------------------------------------------

@@ -108,8 +108,10 @@ module tb_top;
      //      run_test("apb2axi_base_test");
      // end
      initial begin
+          $display("### FSDB DUMP BLOCK HIT at time %0t", $time);
           $fsdbDumpfile("waves.fsdb");
-          $fsdbDumpvars(0, tb_top);
+          $fsdbDumpvars(0, tb_top, "+all");
+          $fsdbDumpMDA();
      end
 
      initial begin
@@ -123,8 +125,8 @@ module tb_top;
      end
 
      initial begin
-          uvm_config_db#(virtual apb_if)::set(null, "uvm_test_top.env", "apb_vif", apb_vif);
-          uvm_config_db#(virtual axi_if)::set(null, "uvm_test_top.env", "axi_vif", axi_vif);
+          uvm_config_db#(virtual apb_if)::set(null, "*", "apb_vif", apb_vif);
+          uvm_config_db#(virtual axi_if)::set(null, "*", "axi_vif", axi_vif);
           run_test("apb2axi_bringup_test");
      end
 

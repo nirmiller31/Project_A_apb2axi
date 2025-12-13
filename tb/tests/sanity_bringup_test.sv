@@ -10,6 +10,7 @@ class sanity_bringup_test extends uvm_test;
 
      function void build_phase(uvm_phase phase);
           super.build_phase(phase);
+          uvm_root::get().set_timeout(50us, 1);
           env                 = apb2axi_env::type_id::create("env", this);
      endfunction
 

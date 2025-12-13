@@ -12,6 +12,7 @@ class apb2axi_base_test extends uvm_test;
      function void build_phase(uvm_phase phase);
           super.build_phase(phase);
           apb2axi_tb_pkg::apb2axi_configure_verbosity();
+          uvm_top.set_timeout(10ms, 1);
           env                    = apb2axi_env::type_id::create("env", this);
           uvm_top.print_topology();
      endfunction

@@ -430,7 +430,7 @@ module apb2axi #(
           .rresp              (RRESP),
           .rlast              (RLAST),
           .rvalid             (RVALID),
-          .rready             (rready_builder),   // top-level RREADY now comes from here
+          .rready             (RREADY),   // top-level RREADY now comes from here
 
           .rdf_push_valid     (rdf_push_valid),
           .rdf_push_payload   (rdf_push_payload),

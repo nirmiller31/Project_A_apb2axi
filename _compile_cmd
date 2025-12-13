@@ -1,1 +1,1 @@
-vcs -full64 -sverilog -debug_access+all -ntb_opts uvm-1.2 -f filelist.f -l logs/comp.log -P $VERDI_HOME/share/PLI/VCS/linux64/novas.tab $VERDI_HOME/share/PLI/VCS/linux64/libnovas.so
+vcs -full64 -sverilog -debug_access+all -kdb -ntb_opts uvm-1.2 -f filelist.f -l logs/comp.log -P $VERDI_HOME/share/PLI/VCS/linux64/novas.tab $VERDI_HOME/share/PLI/VCS/linux64/libnovas.so

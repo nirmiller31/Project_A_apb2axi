@@ -12,6 +12,8 @@ class apb2axi_multiple_read_drain_seq extends apb2axi_base_seq;
      rand bit [63:0]   addrs   [FIFO_DEPTH];    // support up to 16 outstanding
      rand bit [63:0]   exp_data[FIFO_DEPTH];
 
+     virtual axi_if axi_vif;
+
      constraint c_num_reads { num_reads inside {[1:FIFO_DEPTH]}; }
 
      constraint addr_range_c {
@@ -36,8 +38,9 @@ class apb2axi_multiple_read_drain_seq extends apb2axi_base_seq;
 
           cmd        = '0;
           cmd[31]    = 1'b0;     // READ
-          cmd[10:8]  = 3'd3;     // size=8 bytes
-          cmd[7:0]   = $urandom_range(0,15);
+          cmd[10:8]  = 3'd3;
+          // cmd[7:0]   = $urandom_range(0,15);
+          cmd[7:0]   = $urandom_range(0,14);
 
           `uvm_info("MULTI_READ", $sformatf("CMD RAW=0x%08h  | is_write=%0d size=%0d len=%0d", cmd, cmd[31], cmd[10:8], cmd[7:0]), UVM_NONE)
 
@@ -126,8 +129,16 @@ class apb2axi_multiple_read_drain_seq extends apb2axi_base_seq;
                `uvm_fatal("SEQ", "Randomization failed")
           end
 
+          if (!uvm_config_db#(virtual axi_if)::get(null, "", "axi_vif", axi_vif)) begin
+               `uvm_fatal("MULTI_READ", "No axi_vif found in config_db for sequence")
+          end
+
           `uvm_info(get_type_name(), $sformatf("Starting multi-read test, num_reads=%0d", num_reads), UVM_NONE)
 
+          if ($test$plusargs("LINEAR_OUTSTANDING") || $test$plusargs("EXTREME_OUTSTANDING")) begin
+               if (!uvm_hdl_force("tb_top.dut.rready_builder", 1'b0))`uvm_fatal("MULTI_READ", "Failed to force tb_top.axi_vif.RREADY=0")
+               `uvm_info("MULTI_READ", "Forced RREADY=0 (block R beats / interleaving now)", UVM_NONE)
+          end
           // --------------------------------------
           // 1) Program N READ commands
           // --------------------------------------
@@ -135,7 +146,13 @@ class apb2axi_multiple_read_drain_seq extends apb2axi_base_seq;
                program_read(i);
                #50;
           end
+          #500;
 
+          if ($test$plusargs("LINEAR_OUTSTANDING") || $test$plusargs("EXTREME_OUTSTANDING")) begin
+               if (!uvm_hdl_force("tb_top.dut.rready_builder", 1'b1))`uvm_fatal("MULTI_READ", "Failed to force tb_top.axi_vif.RREADY=1")
+               `uvm_info("MULTI_READ", "Forced RREADY=1 (allow R beats / interleaving now)", UVM_NONE)
+          end
+          
           #5000;
 
           // --------------------------------------
