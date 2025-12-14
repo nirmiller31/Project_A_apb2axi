@@ -13,6 +13,7 @@ package apb2axi_pkg;
      // --------------------------------------------------
      parameter int APB_ADDR_W = 16;     // width of APB paddr
      parameter int APB_DATA_W = 32;     // APB data width
+     parameter int APB_REG_W  = 32;
      parameter int AXI_ADDR_W = 64;     // full AXI address width
      parameter int AXI_DATA_W = 64;     // AXI data bus width
      parameter int AXI_ID_W   = 4;      // AXI ID width
@@ -20,26 +21,39 @@ package apb2axi_pkg;
      parameter int AXI_LEN_W  = 4;      // AXI ID width
 
      // --------------------------------------------------
-     // Gateway / Directory sizing
+     // Directory sizing
      // --------------------------------------------------
      parameter int TAG_NUM         = 16;        // number of outstanding transactions
      parameter int TAG_WIDTH       = (TAG_NUM <= 1) ? 1 : $clog2(TAG_NUM);
-     parameter int TAG_W       = (TAG_NUM <= 1) ? 1 : $clog2(TAG_NUM);     
+     parameter int TAG_W           = (TAG_NUM <= 1) ? 1 : $clog2(TAG_NUM);     
      parameter int N_TAG           = (1 << TAG_W);
      parameter int DIR_ENTRIES     = (1 << TAG_W);
+
+     // --------------------------------------------------
+     // Field offsets
+     // --------------------------------------------------
+     parameter int DIR_ENTRY_ISWRITE_HI = 31;
+     parameter int DIR_ENTRY_ISWRITE_LO = 31;
+     parameter int DIR_ENTRY_SIZE_HI    = 10;
+     parameter int DIR_ENTRY_SIZE_LO    = 8;
+     parameter int DIR_ENTRY_LEN_HI     = 7;
+     parameter int DIR_ENTRY_LEN_LO     = 0;
 
      // --------------------------------------------------
      // Maximum Beats per burst in our arcitecture
      // --------------------------------------------------
      parameter int MAX_BEATS_NUM   = 16;
-     parameter int FIFO_DEPTH      = 16;
+     parameter int FIFO_DEPTH      = TAG_NUM;
      
      // --------------------------------------------------
      // APB register map (byte offsets)
      // --------------------------------------------------
-     localparam logic [APB_ADDR_W-1:0] GATEWAY_ADDR_LO = 16'h00;
-     localparam logic [APB_ADDR_W-1:0] GATEWAY_ADDR_HI = 16'h04;
-     localparam logic [APB_ADDR_W-1:0] GATEWAY_CMD     = 16'h08;
+     parameter logic [APB_ADDR_W-1:0] REG_ADDR_ADDR_LO      = 16'h00;
+     parameter logic [APB_ADDR_W-1:0] REG_ADDR_ADDR_HI      = 16'h04;
+     parameter logic [APB_ADDR_W-1:0] REG_ADDR_CMD          = 16'h08;
+     parameter logic [APB_ADDR_W-1:0] REG_ADDR_RD_STATUS    = 16'h0C;
+     parameter logic [APB_ADDR_W-1:0] REG_ADDR_RD_DATA      = 16'h10;
+     parameter logic [APB_ADDR_W-1:0] REG_ADDR_RD_TAG_SEL   = 16'h14;
 
      // --------------------------------------------------
      // Directory entry
@@ -72,7 +86,7 @@ package apb2axi_pkg;
           logic [7:0]              num_beats;
           dir_state_e              state;
      } directory_entry_t;
-     parameter int REQ_WIDTH  = $bits(directory_entry_t);
+     parameter int CMD_ENTRY_W     = $bits(directory_entry_t);
 
      // --------------------------------------------------
      // Completion entry
@@ -84,7 +98,17 @@ package apb2axi_pkg;
           logic                    error;
           logic [7:0]              num_beats;
      } completion_entry_t;
-     parameter int COMPLETION_W  = $bits(completion_entry_t);
+     parameter int CPL_W           = $bits(completion_entry_t);
+
+     // --------------------------------------------------
+     // Response Handler Beat struct
+     // --------------------------------------------------
+     typedef struct packed {
+          logic [AXI_DATA_W-1:0]   data;
+          logic [1:0]              resp;
+          logic                    last;
+     } rd_beat_t;
+     parameter int RD_BEAT_W = $bits(rd_beat_t);  
 
      // --------------------------------------------------
      // Read Data FIFO entry

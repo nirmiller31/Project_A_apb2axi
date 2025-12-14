@@ -8,35 +8,31 @@
 import apb2axi_pkg::*;
 
 module apb2axi_write_builder #(
-    parameter int AXI_ADDR_W = AXI_ADDR_W,
-    parameter int AXI_DATA_W = AXI_DATA_W,
-    parameter int FIFO_ENTRY_W = 1 + 3 + 4 + AXI_ADDR_W  // is_write + size + len + addr
+    parameter int FIFO_ENTRY_W = CMD_ENTRY_W
 )(
-    input  logic                     aclk,
-    input  logic                     aresetn,
-
+    input  logic                        aclk,
+    input  logic                        aresetn,
     // Connection to WRITE FIFO
-    input  logic                     wr_pop_valid,
-    output logic                     wr_pop_ready,
-    input  logic [FIFO_ENTRY_W-1:0]  wr_pop_data,
-
-    // AXI interface drive
-    output logic [AXI_ID_W-1:0]      awid,
-    output logic [AXI_ADDR_W-1:0]    awaddr,
-    output logic [3:0]               awlen,
-    output logic [2:0]               awsize,
-    output logic [1:0]               awburst,
-    output logic                     awlock,
-    output logic [3:0]               awcache,
-    output logic [2:0]               awprot,
-    output logic                     awvalid,
-    input  logic                     awready,
-
-    output logic [AXI_DATA_W-1:0]    wdata,
-    output logic [(AXI_DATA_W/8)-1:0] wstrb,
-    output logic                      wlast,
-    output logic                      wvalid,
-    input  logic                      wready
+    input  logic                        wr_pop_vld,
+    output logic                        wr_pop_rdy,
+    input  logic [FIFO_ENTRY_W-1:0]     wr_pop_data,
+    // AXI AW
+    output logic [AXI_ID_W-1:0]         awid,
+    output logic [AXI_ADDR_W-1:0]       awaddr,
+    output logic [3:0]                  awlen,
+    output logic [2:0]                  awsize,
+    output logic [1:0]                  awburst,
+    output logic                        awlock,
+    output logic [3:0]                  awcache,
+    output logic [2:0]                  awprot,
+    output logic                        awvalid,
+    input  logic                        awready,
+    // AXI W
+    output logic [AXI_DATA_W-1:0]       wdata,
+    output logic [(AXI_DATA_W/8)-1:0]   wstrb,
+    output logic                        wlast,
+    output logic                        wvalid,
+    input  logic                        wready
 );
 
     // ----------------------------------------------------------
@@ -59,7 +55,7 @@ module apb2axi_write_builder #(
         awvalid = 1'b0;
         wvalid  = 1'b0;
 
-        wr_pop_ready = 1'b0;
+        wr_pop_rdy = 1'b0;
 
         awid    = '0;
         awaddr  = entry.addr;
@@ -79,7 +75,7 @@ module apb2axi_write_builder #(
         case(state)
 
             IDLE: begin
-                if (wr_pop_valid && entry.is_write) begin
+                if (wr_pop_vld && entry.is_write) begin
                     next_state = SEND_AW;
                 end
             end
@@ -93,7 +89,7 @@ module apb2axi_write_builder #(
             SEND_W: begin
                 wvalid = 1'b1;
                 if (wvalid && wready) begin
-                    wr_pop_ready = 1'b1;   // consume FIFO entry
+                    wr_pop_rdy = 1'b1;   // consume FIFO entry
                     next_state   = IDLE;
                 end
             end

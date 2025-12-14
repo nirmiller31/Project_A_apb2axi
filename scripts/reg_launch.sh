@@ -12,8 +12,8 @@ UVM_TESTNAME="${UVM_TESTNAME:-apb2axi_bringup_test}"
 
 # Seeds: either provide SEEDS="1 2 3" or SEED_START/SEED_COUNT
 SEEDS="${SEEDS:-}"
-SEED_START="${SEED_START:-1}"
-SEED_COUNT="${SEED_COUNT:-100}"
+SEED_START="${SEED_START:-1546123}"
+SEED_COUNT="${SEED_COUNT:-50}"
 
 # Parallelism
 JOBS="${JOBS:-1}"

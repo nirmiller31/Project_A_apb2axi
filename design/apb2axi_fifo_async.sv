@@ -12,16 +12,16 @@ module apb2axi_fifo_async #(
     // Write clock domain
     input  logic               wr_clk,
     input  logic               wr_resetn,
-    input  logic               wr_valid,
+    input  logic               wr_vld,
     input  logic [WIDTH-1:0]   wr_data,
-    output logic               wr_ready,
+    output logic               wr_rdy,
 
     // Read clock domain
     input  logic               rd_clk,
     input  logic               rd_resetn,
-    output logic               rd_valid,
+    output logic               rd_vld,
     output logic [WIDTH-1:0]   rd_data,
-    input  logic               rd_ready
+    input  logic               rd_rdy
 );
 
     // ------------------------------------------------------------
@@ -92,7 +92,7 @@ module apb2axi_fifo_async #(
             wptr_gray         <= '0;
             rptr_gray_wrclk_1 <= '0;
             rptr_gray_wrclk_2 <= '0;
-            wr_ready          <= 1'b1;
+            wr_rdy            <= 1'b1;
 
             `ifndef SYNTHESIS
             $display("[%0t][FIFO_WR] RESET", $time);
@@ -104,10 +104,10 @@ module apb2axi_fifo_async #(
             rptr_gray_wrclk_2 <= rptr_gray_wrclk_1;
 
             // ready when not full
-            wr_ready <= !full;
+            wr_rdy <= !full;
 
             // PUSH
-            if (wr_valid && wr_ready) begin
+            if (wr_vld && wr_rdy) begin
                 mem[wptr_bin[PTR_W-1:0]] <= wr_data;
                 wptr_bin  <= wptr_bin_next;
                 wptr_gray <= wptr_gray_next;
@@ -132,7 +132,7 @@ module apb2axi_fifo_async #(
             rptr_gray         <= '0;
             wptr_gray_rdclk_1 <= '0;
             wptr_gray_rdclk_2 <= '0;
-            rd_valid          <= 1'b0;
+            rd_vld            <= 1'b0;
             rd_data           <= '0;
 
             `ifndef SYNTHESIS
@@ -145,12 +145,12 @@ module apb2axi_fifo_async #(
             wptr_gray_rdclk_2 <= wptr_gray_rdclk_1;
 
             // valid whenever FIFO is non-empty
-            rd_valid <= !empty;
+            rd_vld <= !empty;
 
             // POP only on valid & ready
-            if (!empty && rd_ready) begin
+            if (!empty && rd_rdy) begin
                 rd_data <= mem[rptr_bin[PTR_W-1:0]];
-                rd_valid <= '1;
+                rd_vld  <= '1;
 
                 `ifndef SYNTHESIS
                 $display("[%0t][FIFO_RD] POP  data=%h idx=%0d",

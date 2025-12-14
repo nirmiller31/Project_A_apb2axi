@@ -23,12 +23,11 @@ module apb2axi_reg #()(
      input entry_state_e           reg_dir_entry_state,
 
      input  logic                  rdf_reg_data_vld,
-     output logic                  rdf_reg_data_ready,     
+     output logic                  rdf_reg_data_rdy,     
      input  logic [APB_DATA_W-1:0] rdf_reg_data_out,
      input  logic                  rdf_reg_data_last,
      output logic                  rdf_reg_data_req,
      output logic [TAG_W-1:0]      rdf_reg_data_req_tag
-
 );
 
      // ----------------------------------------------------------------
@@ -40,19 +39,12 @@ module apb2axi_reg #()(
      //  0x10 : RD_DATA   (RO, streaming)
      //  0x14 : TAG_TO_CONSUME
      // ----------------------------------------------------------------
-     localparam REG_ADDR_ADDR_LO   = 'h00;
-     localparam REG_ADDR_ADDR_HI   = 'h04;
-     localparam REG_ADDR_CMD       = 'h08;
-     localparam REG_ADDR_RD_STATUS = 'h0C;
-     localparam REG_ADDR_RD_DATA   = 'h10;
-     localparam REG_RD_TAG_SEL     = 'h14;
-
-     logic [31:0]                  addr_lo_rd_val;
-     logic [31:0]                  addr_hi_rd_val;
-     logic [31:0]                  cmd_rd_val;
-     logic [31:0]                  tag_to_consume_rd_val;
-     logic [31:0]                  sts_rd_val;
-     logic [31:0]                  data_rd_val;
+     logic [APB_REG_W-1:0]         addr_lo_rd_val;
+     logic [APB_REG_W-1:0]         addr_hi_rd_val;
+     logic [APB_REG_W-1:0]         cmd_rd_val;
+     logic [APB_REG_W-1:0]         tag_to_consume_rd_val;
+     logic [APB_REG_W-1:0]         sts_rd_val;
+     logic [APB_REG_W-1:0]         data_rd_val;
 
      logic                         sel_addr_lo, sel_addr_hi, sel_cmd, sel_rd_status, sel_rd_data, sel_tag_to_consume;
      logic                         addr_lo_we, addr_lo_we_d, addr_hi_we, cmd_we, tag_to_consume_we;
@@ -67,7 +59,7 @@ module apb2axi_reg #()(
      assign sel_cmd                = ({paddr[4:2], 2'b00} == REG_ADDR_CMD);
      assign sel_rd_status          = ({paddr[4:2], 2'b00} == REG_ADDR_RD_STATUS);
      assign sel_rd_data            = ({paddr[4:2], 2'b00} == REG_ADDR_RD_DATA);
-     assign sel_tag_to_consume     = ({paddr[4:2], 2'b00} == REG_RD_TAG_SEL);  
+     assign sel_tag_to_consume     = ({paddr[4:2], 2'b00} == REG_ADDR_RD_TAG_SEL);  
 
      // Write enables for RW regs
      assign addr_lo_we             = psel & penable & pwrite & sel_addr_lo;
@@ -114,7 +106,7 @@ module apb2axi_reg #()(
           end
      end
 
-     assign rdf_reg_data_ready               = psel && penable && !pwrite && sel_rd_data;
+     assign rdf_reg_data_rdy                 = psel && penable && !pwrite && sel_rd_data;
      assign new_tag_set                      = psel && penable && pwrite && sel_tag_to_consume;
      assign reg_dir_tag_sel                  = tag_to_consume_rd_val;
      assign data_rd_val                      = rdf_reg_data_out[APB_DATA_W-1:0];
@@ -127,10 +119,10 @@ module apb2axi_reg #()(
                                                   reg_dir_entry.tag                         // [3:0]
                                              };
      // Outputs for Directory fields
-     assign reg_dir_alloc_entry.is_write     = cmd_rd_val[31];     
+     assign reg_dir_alloc_entry.is_write     = cmd_rd_val[DIR_ENTRY_ISWRITE_HI : DIR_ENTRY_ISWRITE_LO];     
      assign reg_dir_alloc_entry.addr         = {addr_hi_rd_val, addr_lo_rd_val};
-     assign reg_dir_alloc_entry.len          = cmd_rd_val[7:0];
-     assign reg_dir_alloc_entry.size         = cmd_rd_val[10:8];
+     assign reg_dir_alloc_entry.len          = cmd_rd_val[DIR_ENTRY_LEN_HI : DIR_ENTRY_LEN_LO];
+     assign reg_dir_alloc_entry.size         = cmd_rd_val[DIR_ENTRY_SIZE_HI : DIR_ENTRY_SIZE_LO];
      assign reg_dir_alloc_entry.burst        = '0;
      assign reg_dir_alloc_entry.tag          = '0;
      assign reg_dir_alloc_entry.resp         = '0;
@@ -159,11 +151,8 @@ module apb2axi_reg #()(
 
                reg_dir_entry_consumed   <= 1'b0;
           end else begin
-               // state                    <= state;          // next_state = state
-
                pready                   <= 1'b1;           // pready_next = 1
                rdf_reg_data_req         <= 1'b0;           // rdf_data_req_next = 0
-               // rdf_reg_data_req_tag     <= rdf_reg_data_req_tag; // rdf_data_req_tag_next = rdf_data_req_tag
 
                reg_dir_entry_consumed   <= 1'b0;
 
@@ -268,7 +257,7 @@ module apb2axi_reg #()(
 
      always_ff @(posedge pclk) begin
           if (!presetn) begin
-          end else begin
+          end else if (reg_debug_en) begin
                if (addr_lo_we) begin
                     $display("REG_DBG %0t AddrLo WE asserted: paddr=0x%0h pwdata=0x%0h", $time, paddr, pwdata);
                end

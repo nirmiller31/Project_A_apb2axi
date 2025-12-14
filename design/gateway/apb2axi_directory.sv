@@ -8,21 +8,21 @@ module apb2axi_directory #()(
 
      input  logic                       reg_dir_alloc_vld,            // new descriptor available
      input  directory_entry_t           reg_dir_alloc_entry,          // descriptor
-     output logic                       reg_dir_alloc_ready,          // can accept?
+     output logic                       reg_dir_alloc_rdy,            // can accept?
 
      input  logic                       reg_dir_entry_consumed,       // APB says: done with this TAG (consumed)
 
-     input  logic [TAG_WIDTH-1:0]       reg_dir_tag_sel,               // which TAG to inspect (status read)
+     input  logic [TAG_W-1:0]           reg_dir_tag_sel,              // which TAG to inspect (status read)
      output directory_entry_t           reg_dir_entry,
      output entry_state_e               reg_dir_entry_state,
 
-     output logic                       dir_mgr_pop_valid,            // We have an entry ready to FIFO'ed
+     output logic                       dir_mgr_pop_vld,              // We have an entry ready to FIFO'ed
      output directory_entry_t           dir_mgr_pop_entry,            // The ready entry
-     input  logic                       dir_mgr_pop_ready,            // FIFO can accept
+     input  logic                       dir_mgr_pop_rdy,              // FIFO can accept
 
      input  logic                       cq_dir_cpl_vld,               // Txn stored in handler, all beats recieved from AXI
      input  completion_entry_t          cq_dir_cpl_entry,             // The completion entry
-     output logic                       cq_dir_cpl_ready
+     output logic                       cq_dir_cpl_rdy
 
 );
 
@@ -34,14 +34,14 @@ module apb2axi_directory #()(
      directory_entry_t                  entry [DIR_ENTRIES];
 
      logic                              found_alloc;
-     logic [TAG_WIDTH-1:0]              oldest_tag;
+     logic [TAG_W-1:0]                  oldest_tag;
 
-     logic [TAG_WIDTH-1:0]              next_free_ptr;
+     logic [TAG_W-1:0]                  next_free_ptr;
 
      always_comb begin
-          reg_dir_alloc_ready           = (state[next_free_ptr] == ST_EMPTY);    // Free entry detection
+          reg_dir_alloc_rdy             = (state[next_free_ptr] == ST_EMPTY);    // Free entry detection
 
-          dir_mgr_pop_valid             = found_alloc;
+          dir_mgr_pop_vld               = found_alloc;
           dir_mgr_pop_entry             = entry[oldest_tag];
 
           reg_dir_entry                 = entry[reg_dir_tag_sel];
@@ -54,23 +54,23 @@ module apb2axi_directory #()(
      always_ff @(posedge pclk) begin
           if (!presetn) begin
                next_free_ptr                                <= '0;
-               cq_dir_cpl_ready                             <= '1;
+               cq_dir_cpl_rdy                               <= '1;
                for (int i = 0; i < DIR_ENTRIES; i++) begin
                     state[i]                                <= ST_EMPTY;
                     entry[i]                                <= '0;
                end
           end
           else begin
-               if (reg_dir_alloc_vld && reg_dir_alloc_ready) begin                        // EMPTY -> ALLOCATED (commited vie regs)
+               if (reg_dir_alloc_vld && reg_dir_alloc_rdy) begin                        // EMPTY -> ALLOCATED (commited vie regs)
                     entry[next_free_ptr]                    <= reg_dir_alloc_entry;
                     entry[next_free_ptr].tag                <= next_free_ptr;
                     state[next_free_ptr]                    <= ST_ALLOCATED;
                     next_free_ptr                           <= next_free_ptr + 1'b1;
                end
-               if (dir_mgr_pop_valid && dir_mgr_pop_ready) begin                          // ALLOCATED -> PENDING (once popped to FIFO)
+               if (dir_mgr_pop_vld && dir_mgr_pop_rdy) begin                          // ALLOCATED -> PENDING (once popped to FIFO)
                     state[oldest_tag]                       <= ST_PENDING;
                end
-               if (cq_dir_cpl_vld && cq_dir_cpl_ready) begin
+               if (cq_dir_cpl_vld && cq_dir_cpl_rdy) begin
                     state[cq_dir_cpl_entry.tag]             <= ST_COMPLETE;               // PENDING -> COMPLETE (after all data recieved)
                     entry[cq_dir_cpl_entry.tag].resp        <= cq_dir_cpl_entry.resp;
                     entry[cq_dir_cpl_entry.tag].num_beats   <= cq_dir_cpl_entry.num_beats;
