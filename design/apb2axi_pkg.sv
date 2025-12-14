@@ -121,4 +121,14 @@ package apb2axi_pkg;
      } rdf_entry_t;
      parameter int RDF_W = $bits(rdf_entry_t);
 
+     // --------------------------------------------------
+     // Write Data FIFO entry
+     // --------------------------------------------------
+     typedef struct packed {
+          logic [TAG_W-1:0]        tag;
+          logic [AXI_DATA_W-1:0]   data;
+          logic                    last;
+     } wr_entry_t;
+     parameter int DATA_ENTRY_W = $bits(wr_entry_t);
+
 endpackage

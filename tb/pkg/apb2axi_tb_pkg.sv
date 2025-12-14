@@ -59,6 +59,9 @@ package apb2axi_tb_pkg;
      `include "tb/seq/apb2axi_multiple_read_drain_seq.sv"
      `include "tb/seq/apb2axi_reconsume_same_tag_seq.sv"
      `include "tb/seq/apb2axi_read_drain_seq.sv"
+     `include "tb/seq/apb2axi_window_seq.sv"
+     `include "tb/seq/apb2axi_random_drain_seq.sv"
+     `include "tb/seq/apb2axi_stress_seq.sv"
 
      // ======================================================
      //  Tests

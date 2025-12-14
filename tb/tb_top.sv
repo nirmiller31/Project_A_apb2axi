@@ -39,7 +39,7 @@ module tb_top;
      );
 
      apb2axi dut (
-          // APB side
+          // ------------------ APB side ------------------
           .PCLK      (PCLK),
           .PRESETn   (PRESETn),
           .PADDR     (apb_vif.PADDR),
@@ -101,12 +101,6 @@ module tb_top;
           .RREADY   (axi_vif.RREADY)
      );
 
-     // initial begin
-     //      uvm_config_db#(virtual apb_if)::set(null, "uvm_test_top.env", "apb_vif", apb_vif);
-     //      uvm_config_db#(virtual axi_if)::set(null, "uvm_test_top.env", "axi_vif", axi_vif);
-
-     //      run_test("apb2axi_base_test");
-     // end
      initial begin
           $display("### FSDB DUMP BLOCK HIT at time %0t", $time);
           $fsdbDumpfile("waves.fsdb");
@@ -115,26 +109,9 @@ module tb_top;
      end
 
      initial begin
-          #1ns;
-          $display(">>> TB_TOP alive at %0t  PCLK=%0b ACLK=%0b", $time, PCLK, ACLK);
-     end
-
-     initial begin
-          #100ns;
-          $display(">>> TB_TOP still running at %0t", $time);
-     end
-
-     initial begin
           uvm_config_db#(virtual apb_if)::set(null, "*", "apb_vif", apb_vif);
           uvm_config_db#(virtual axi_if)::set(null, "*", "axi_vif", axi_vif);
           run_test("apb2axi_bringup_test");
      end
-
-     // initial begin
-     //      #10us;
-     //      `uvm_info("TB_TOP", "Global simulation timeout reached", UVM_NONE)
-     //      $finish;
-     // end
-
 
 endmodule

@@ -12,8 +12,8 @@ UVM_TESTNAME="${UVM_TESTNAME:-apb2axi_bringup_test}"
 
 # Seeds: either provide SEEDS="1 2 3" or SEED_START/SEED_COUNT
 SEEDS="${SEEDS:-}"
-SEED_START="${SEED_START:-1546123}"
-SEED_COUNT="${SEED_COUNT:-50}"
+SEED_START="${SEED_START:-26541200}"
+SEED_COUNT="${SEED_COUNT:-100}"
 
 # Parallelism
 JOBS="${JOBS:-1}"
@@ -30,7 +30,13 @@ OUTROOT="${OUTROOT:-out/regress_${UVM_TESTNAME}_$(date +%Y%m%d_%H%M%S)}"
 # ---------------------------
 # Each mode is: MODE_NAME|EXTRA_PLUSARGS
 MODES=(
-  "mul_read_drain|+APB2AXI_SEQ=MUL_READ_DRAIN +LINEAR_OUTSTANDING"
+  "mul_read_drain_regular|+APB2AXI_SEQ=MUL_READ_DRAIN"
+  "mul_read_drain_linear|+APB2AXI_SEQ=MUL_READ_DRAIN +LINEAR_OUTSTANDING"
+  "mul_read_drain_extreme|+APB2AXI_SEQ=MUL_READ_DRAIN +EXTREME_OUTSTANDING"
+  "outstanding_window_linear|+APB2AXI_SEQ=WINDOW +LINEAR_OUTSTANDING"
+  "outstanding_window_extreme|+APB2AXI_SEQ=WINDOW +EXTREME_OUTSTANDING"
+  "random_drain_linear|+APB2AXI_SEQ=RANDOM_DRAIN +LINEAR_OUTSTANDING"
+  "random_drain_extreme|+APB2AXI_SEQ=RANDOM_DRAIN +EXTREME_OUTSTANDING"
 )
 
 # ---------------------------

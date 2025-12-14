@@ -129,6 +129,11 @@ module apb2axi_response_handler #()(
                             cur_last[tag_idx]       <= beat.last;
                         end
                     end
+                    else begin                                          // Return '0 in case R didn't recieved
+                        rdf_reg_data_out            <= '0;
+                        rdf_reg_data_vld            <= 1'b1;
+                        rdf_reg_data_last           <= 1'b1;
+                    end
                 end else begin                                          // Normal slicing for subsequent words of this beat                    
                     rdf_reg_data_out                <= cur_data[tag_idx][cur_idx[tag_idx] +: APB_DATA_W];
                     rdf_reg_data_vld                <= 1'b1;

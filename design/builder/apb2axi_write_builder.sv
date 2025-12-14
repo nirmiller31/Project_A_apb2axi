@@ -8,14 +8,11 @@
 import apb2axi_pkg::*;
 
 module apb2axi_write_builder #(
-    parameter int FIFO_ENTRY_W = CMD_ENTRY_W
+    parameter int CMD_ENTRY_W = CMD_ENTRY_W,
+    parameter int DATA_ENTRY_W = CMD_ENTRY_W //DATA_ENTRY_W
 )(
     input  logic                        aclk,
     input  logic                        aresetn,
-    // Connection to WRITE FIFO
-    input  logic                        wr_pop_vld,
-    output logic                        wr_pop_rdy,
-    input  logic [FIFO_ENTRY_W-1:0]     wr_pop_data,
     // AXI AW
     output logic [AXI_ID_W-1:0]         awid,
     output logic [AXI_ADDR_W-1:0]       awaddr,
@@ -32,7 +29,15 @@ module apb2axi_write_builder #(
     output logic [(AXI_DATA_W/8)-1:0]   wstrb,
     output logic                        wlast,
     output logic                        wvalid,
-    input  logic                        wready
+    input  logic                        wready,
+    // Connection to WRITE FIFO
+    input  logic                        wr_pop_vld,
+    output logic                        wr_pop_rdy,
+    input  logic [CMD_ENTRY_W-1:0]      wr_pop_data,
+    // Connection to WRITE FIFO
+    input  logic                        wd_pop_vld,
+    output logic                        wd_pop_rdy,
+    input  logic [DATA_ENTRY_W-1:0]     wd_pop_data
 );
 
     // ----------------------------------------------------------
@@ -41,75 +46,150 @@ module apb2axi_write_builder #(
     directory_entry_t entry;
     assign entry = wr_pop_data;
 
-    // ----------------------------------------------------------
-    // State machine for AW/W handshake
-    // ----------------------------------------------------------
-    typedef enum logic [1:0] {IDLE, SEND_AW, SEND_W} wb_state_e;
+    assign awlock  = 1'b0;
+    assign awcache = 4'b0011;
+    assign awprot  = 3'b000;
+    assign awburst = 2'b01; // INCR
 
-    wb_state_e state, next_state;
+    // ------------------------------------------------------------------
+    // Per-tag write tracking
+    // ------------------------------------------------------------------
+    typedef enum logic [1:0] {ST_IDLE, ST_AW, ST_W} st_e;
+    st_e st;
 
-    // ----------------------------------------------------------
-    // Default AXI outputs
-    // ----------------------------------------------------------
-    always_comb begin
-        awvalid = 1'b0;
-        wvalid  = 1'b0;
+    logic [AXI_ID_W-1:0]            cur_id;
+    logic [AXI_ADDR_W-1:0]          cur_addr;
+    logic [3:0]                     cur_len;
+    logic [2:0]                     cur_size;
+    logic [7:0]                     beats_left; // = cur_len+1 (fits AXI3 max 16 beats)
 
-        wr_pop_rdy = 1'b0;
-
-        awid    = '0;
-        awaddr  = entry.addr;
-        awlen   = 4'd0;       // single beat
-        awsize  = entry.size;
-        awburst = 2'b01;      // INCR
-        awlock  = 1'b0;
-        awcache = 4'b0011;    // Normal, non-bufferable, modifiable
-        awprot  = 3'b000;
-
-        wdata   = '0;         // TODO: later: connect a write-data provider
-        wstrb   = { (AXI_DATA_W/8){1'b1} };
-        wlast   = 1'b1;
-
-        next_state = state;
-
-        case(state)
-
-            IDLE: begin
-                if (wr_pop_vld && entry.is_write) begin
-                    next_state = SEND_AW;
-                end
-            end
-
-            SEND_AW: begin
-                awvalid = 1'b1;
-                if (awvalid && awready)
-                    next_state = SEND_W;
-            end
-
-            SEND_W: begin
-                wvalid = 1'b1;
-                if (wvalid && wready) begin
-                    wr_pop_rdy = 1'b1;   // consume FIFO entry
-                    next_state   = IDLE;
-                end
-            end
-
-        endcase
+    // -----------------------------
+    // Minimal debug (optional)
+    // -----------------------------
+    bit wb_dbg;
+    initial begin
+        wb_dbg = $test$plusargs("APB2AXI_WB_DEBUG");
+        if (wb_dbg) $display("%t [WB_DBG] WriteBuilder debug ENABLED (+APB2AXI_WB_DEBUG)", $time);
     end
 
-    // State register
+    // -----------------------------
+    // Main control
+    // -----------------------------
     always_ff @(posedge aclk) begin
-        if (!aresetn)
-            state <= IDLE;
-        else
-            state <= next_state;
-    end
+        if (!aresetn) begin
+            st         <= ST_IDLE;
 
-    always_ff @(posedge aclk) begin
-        if (awvalid && awready)
-            $display("%t [WR_BUILDER] AW handshake addr=%h len=%0d id=%0d", $time, awaddr, awlen, awid);
-        if (wvalid && wready)
-            $display("%t [WR_BUILDER] WDATA=%h WLAST=%0b", $time, wdata, wlast);
+            awvalid    <= 1'b0;
+            wvalid     <= 1'b0;
+            wlast      <= 1'b0;
+
+            wr_pop_rdy <= 1'b0;
+            wd_pop_rdy <= 1'b0;
+
+            cur_id     <= '0;
+            cur_addr   <= '0;
+            cur_len    <= '0;
+            cur_size   <= '0;
+            beats_left <= '0;
+        end else begin
+            // defaults
+            wr_pop_rdy <= 1'b0;
+            wd_pop_rdy <= 1'b0;
+
+            // hold valids if stalled
+            if (awvalid && !awready) awvalid <= 1'b1;
+            if (wvalid  && !wready ) wvalid  <= 1'b1;
+
+            // if handshake happened, we'll typically drop valids unless re-raised below
+            if (awvalid && awready) awvalid <= 1'b0;
+            if (wvalid  && wready ) begin
+                wvalid <= 1'b0;
+                wlast  <= 1'b0;
+            end
+
+            unique case (st)
+                // -------------------------------------------------
+                // IDLE: wait for a command, latch it atomically
+                // -------------------------------------------------
+                ST_IDLE: begin
+                    if (wr_pop_vld) begin
+                        // pop cmd exactly once
+                        wr_pop_rdy <= 1'b1;
+
+                        cur_id   <= entry.tag;
+                        cur_addr <= entry.addr;
+                        cur_len  <= entry.len;
+                        cur_size <= entry.size;
+
+                        // beats_left = len+1
+                        beats_left <= {4'b0, entry.len} + 8'd1;
+
+                        // drive AW next
+                        st <= ST_AW;
+
+                        if (wb_dbg)
+                            $display("%t [WB] CMD  tag=%0d addr=%h len=%0d size=%0d",
+                                     $time, entry.tag, entry.addr, entry.len, entry.size);
+                    end
+                end
+
+                // -------------------------------------------------
+                // AW: issue address, wait for handshake
+                // -------------------------------------------------
+                ST_AW: begin
+                    if (!awvalid) begin
+                        awid    <= cur_id;
+                        awaddr  <= cur_addr;
+                        awlen   <= cur_len;
+                        awsize  <= cur_size;
+                        awvalid <= 1'b1;
+                    end
+
+                    if (awvalid && awready) begin
+                        st <= ST_W;
+                        if (wb_dbg)
+                            $display("%t [WB] AW   tag=%0d addr=%h len=%0d", $time, awid, awaddr, awlen);
+                    end
+                end
+
+                // -------------------------------------------------
+                // W: consume exactly beats_left beats from data FIFO
+                // -------------------------------------------------
+                ST_W: begin
+                    // Only launch a beat when we're not currently holding WVALID
+                    if (!wvalid) begin
+                        // Require data available
+                        if (wd_pop_vld) begin
+                            wd_pop_rdy <= 1'b1;     // pop exactly with issuing W
+                            wdata      <= wd_pop_data;
+                            wvalid     <= 1'b1;
+
+                            // last beat?
+                            if (beats_left == 8'd1)
+                                wlast <= 1'b1;
+
+                            if (wb_dbg)
+                                $display("%t [WB] W    tag=%0d last=%0b beats_left=%0d",
+                                         $time, cur_id, (beats_left==8'd1), beats_left);
+                        end
+                    end
+
+                    // On W handshake, decrement beats_left and finish when done
+                    if (wvalid && wready) begin
+                        beats_left <= beats_left - 8'd1;
+
+                        if (beats_left == 8'd1) begin
+                            // just sent the last beat
+                            st <= ST_IDLE;
+                            if (wb_dbg)
+                                $display("%t [WB] DONE tag=%0d", $time, cur_id);
+                        end
+                    end
+                end
+
+                default: st <= ST_IDLE;
+            endcase
+        end
     end
 
 endmodule

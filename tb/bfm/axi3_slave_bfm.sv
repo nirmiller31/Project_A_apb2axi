@@ -90,15 +90,15 @@ class axi3_slave_bfm extends uvm_component;
 
           if ($test$plusargs("EXTREME_OUTSTANDING")) begin
                read_mode = MODE_EXTREME;
-               `uvm_info("AXI3_BFM", "Read mode: EXTREME_OUTSTANDING", UVM_NONE)
+               `uvm_info("AXI3_BFM", "Read mode: EXTREME_OUTSTANDING", apb2axi_verbosity)
           end
           else if ($test$plusargs("LINEAR_OUTSTANDING")) begin
                read_mode = MODE_OUTSTANDING;
-               `uvm_info("AXI3_BFM", "Read mode: LINEAR_OUTSTANDING", UVM_NONE)
+               `uvm_info("AXI3_BFM", "Read mode: LINEAR_OUTSTANDING", apb2axi_verbosity)
           end
           else begin
                read_mode = MODE_REGULAR;
-               `uvm_info("AXI3_BFM", "Read mode: LINEAR (default)", UVM_NONE)
+               `uvm_info("AXI3_BFM", "Read mode: LINEAR (default)", apb2axi_verbosity)
           end
      endfunction
 
@@ -146,7 +146,7 @@ class axi3_slave_bfm extends uvm_component;
                else
                     rdata = '0;
 
-                    `uvm_info("AXI3_BFM", $sformatf("TOOK READ: id=%d, idx=0x%0d rdata=%0h", ar.id, idx, rdata), UVM_NONE)
+               `uvm_info("AXI3_BFM", $sformatf("TOOK READ: id=%d, idx=0x%0d rdata=%0h", ar.id, idx, rdata), apb2axi_verbosity)
 
                vif.RID    <= ar.id;
                vif.RDATA  <= rdata;
@@ -154,7 +154,7 @@ class axi3_slave_bfm extends uvm_component;
                vif.RLAST  <= (ar.beats_left == 1);
                vif.RVALID <= 1'b1;
 
-               $display("%t BFM_DRIVE_R rid=%0d rlast=%0b rvalid=%0b", $time, ar.id, (ar.beats_left == 1), vif.RVALID);
+               `uvm_info("AXI3_BFM", $sformatf("%t BFM_DRIVE_R rid=%0d rlast=%0b rvalid=%0b", $time, ar.id, (ar.beats_left == 1), vif.RVALID), apb2axi_verbosity)
 
                // Wait for RREADY
                do @(posedge vif.ACLK);
@@ -202,7 +202,7 @@ class axi3_slave_bfm extends uvm_component;
           wait (vif.ARESETn === 1'b1);
           @(posedge vif.ACLK);
 
-          `uvm_info("AXI3_BFM","BFM is alive and ready", UVM_NONE)
+          `uvm_info("AXI3_BFM","BFM is alive and ready", apb2axi_verbosity)
 
           fork
                drive_read_queue();
@@ -252,10 +252,10 @@ class axi3_slave_bfm extends uvm_component;
                // ========= WRITE ADDRESS =========
                if (vif.AWVALID && vif.AWREADY) begin
                     fork
-                         automatic logic [AXI_ADDR_W-1:0] awaddr = vif.AWADDR;
-                         automatic logic [3:0]           awlen  = vif.AWLEN;
-                         automatic logic [2:0]           awsize = vif.AWSIZE;
-                         automatic logic [AXI_ID_W-1:0]  awid   = vif.AWID;
+                         automatic logic [AXI_ADDR_W-1:0]   awaddr = vif.AWADDR;
+                         automatic logic [3:0]              awlen  = vif.AWLEN;
+                         automatic logic [2:0]              awsize = vif.AWSIZE;
+                         automatic logic [AXI_ID_W-1:0]     awid   = vif.AWID;
                          begin
                               do_write(awaddr, awlen, awsize, awid);
                          end
@@ -328,9 +328,7 @@ class axi3_slave_bfm extends uvm_component;
                     // or "%0h" if you prefer hex
                end
                s = {s, "}"};
-               `uvm_info("AXI3_BFM",
-                         $sformatf("Burst completion RID order = %s", s),
-                         UVM_NONE)
+               `uvm_info("AXI3_BFM", $sformatf("Burst completion RID order = %s", s), apb2axi_verbosity)
           end
 
           if (beat_order_q.size() > 0) begin
@@ -340,9 +338,7 @@ class axi3_slave_bfm extends uvm_component;
                     s = {s, $sformatf("%0d", beat_order_q[i])};
                end
                s = {s, "}"};
-               `uvm_info("AXI3_BFM",
-                         $sformatf("Beat-level RID order   = %s", s),
-                         UVM_NONE)
+               `uvm_info("AXI3_BFM", $sformatf("Beat-level RID order   = %s", s), apb2axi_verbosity)
           end
      endfunction
 

@@ -16,12 +16,12 @@ module apb2axi_response_collector #()(
     input  logic [1:0]              rresp,
     input  logic                    rlast,
     input  logic                    rvalid,
-    input  logic                    rready,
+    output logic                    rready,
     // AXI Write Response Channel (B)
     input  logic [TAG_W-1:0]        bid,
     input  logic [1:0]              bresp,
     input  logic                    bvalid,
-    input  logic                    bready,
+    output logic                    bready,
 
     // RDF interface (AXI side)
     output logic                    rsp_rdf_push_vld,
@@ -42,6 +42,8 @@ module apb2axi_response_collector #()(
     logic [1:0]                     last_rresp     [TAG_NUM];
 
     int read_idx;
+
+    assign rready = rsp_rdf_push_rdy;
 
     always_ff @(posedge aclk) begin
         if (!aresetn) begin

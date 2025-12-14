@@ -1,5 +1,5 @@
-class apb2axi_multiple_read_drain_seq extends apb2axi_base_seq;
-     `uvm_object_utils(apb2axi_multiple_read_drain_seq)
+class apb2axi_stress_seq extends apb2axi_base_seq;
+     `uvm_object_utils(apb2axi_stress_seq)
 
      localparam int REG_ADDR_LO   = 'h00;
      localparam int REG_ADDR_HI   = 'h04;
@@ -14,7 +14,7 @@ class apb2axi_multiple_read_drain_seq extends apb2axi_base_seq;
 
      virtual axi_if axi_vif;
 
-     constraint c_num_reads { num_reads inside {[1:FIFO_DEPTH]}; }
+     constraint c_num_reads { num_reads == FIFO_DEPTH; }
 
      constraint addr_range_c {
           foreach (addrs[i]) if (i < num_reads) {
@@ -25,7 +25,7 @@ class apb2axi_multiple_read_drain_seq extends apb2axi_base_seq;
           }
      }
 
-     function new(string name = "apb2axi_multiple_read_drain_seq");
+     function new(string name = "apb2axi_stress_seq");
           super.new(name);
      endfunction
 
@@ -42,7 +42,7 @@ class apb2axi_multiple_read_drain_seq extends apb2axi_base_seq;
           // cmd[7:0]   = $urandom_range(0,15);
           cmd[7:0]   = $urandom_range(0,14);
 
-          `uvm_info("MULTI_READ", $sformatf("CMD RAW=0x%08h  | is_write=%0d size=%0d len=%0d", cmd, cmd[31], cmd[10:8], cmd[7:0]), UVM_NONE)
+          `uvm_info("RANDOM_DRAIN", $sformatf("CMD RAW=0x%08h  | is_write=%0d size=%0d len=%0d", cmd, cmd[31], cmd[10:8], cmd[7:0]), UVM_NONE)
 
           apb_write_reg(REG_CMD,     cmd);
           apb_write_reg(REG_ADDR_HI, addr_hi);
@@ -73,7 +73,7 @@ class apb2axi_multiple_read_drain_seq extends apb2axi_base_seq;
           st_resp  = status[13:12];
           st_err   = status[14];
           st_valid = status[15];
-          `uvm_info("MULTI_READ", $sformatf("RD_STATUS RAW=0x%08h  | valid=%0b err=%0b resp=%0d tag=%0d beats=%0d", status, st_valid, st_err, st_resp, st_tag, st_beats ), UVM_NONE)
+          `uvm_info("RANDOM_DRAIN", $sformatf("RD_STATUS RAW=0x%08h  | valid=%0b err=%0b resp=%0d tag=%0d beats=%0d", status, st_valid, st_err, st_resp, st_tag, st_beats ), UVM_NONE)
 
           total_words = ((st_beats == 1) ? 1 : (st_beats + 1)) * WORDS_PER_BEAT;
 
@@ -82,9 +82,9 @@ class apb2axi_multiple_read_drain_seq extends apb2axi_base_seq;
                exp32 = calc_expected_rdata(addrs[idx], word_idx);
 
                if (word32 !== exp32)
-               `uvm_error("MULTI_READ", $sformatf("addr=%h word_idx=%0d EXP=%h GOT=%h", addrs[idx], word_idx, exp32, word32))
+               `uvm_error("RANDOM_DRAIN", $sformatf("addr=%h word_idx=%0d EXP=%h GOT=%h", addrs[idx], word_idx, exp32, word32))
                else
-               `uvm_info("MULTI_READ", $sformatf("addr=%h word_idx=%0d OK: %h", addrs[idx], word_idx, word32), UVM_NONE)
+               `uvm_info("RANDOM_DRAIN", $sformatf("addr=%h word_idx=%0d OK: %h", addrs[idx], word_idx, word32), UVM_NONE)
 
                word_idx++;
           end
@@ -122,56 +122,66 @@ class apb2axi_multiple_read_drain_seq extends apb2axi_base_seq;
      //                       MAIN BODY
      // ============================================================
      virtual task body();
-          bit [31:0] status;
-          int drain_order[$];
+          const int READS_PER_ROUND = TAG_NUM; // fill all tags
+          const int ROUNDS = 2;                // or make this a parameter
 
           if (!randomize()) begin
                `uvm_fatal("SEQ", "Randomization failed")
           end
 
           if (!uvm_config_db#(virtual axi_if)::get(null, "", "axi_vif", axi_vif)) begin
-               `uvm_fatal("MULTI_READ", "No axi_vif found in config_db for sequence")
+               `uvm_fatal("STRESS", "No axi_vif found in config_db for sequence")
           end
 
-          `uvm_info(get_type_name(), $sformatf("Starting multi-read test, num_reads=%0d", num_reads), UVM_NONE)
+          `uvm_info(get_type_name(),
+                    $sformatf("STRESS: %0d rounds, %0d reads per round",
+                              ROUNDS, READS_PER_ROUND),
+                    UVM_NONE)
 
-          if ($test$plusargs("LINEAR_OUTSTANDING") || $test$plusargs("EXTREME_OUTSTANDING")) begin
-               if (!uvm_hdl_force("tb_top.dut.u_resp_collector.rready", 1'b0))`uvm_fatal("MULTI_READ", "Failed to force tb_top.axi_vif.RREADY=0")
-               `uvm_info("MULTI_READ", "Forced RREADY=0 (block R beats / interleaving now)", UVM_NONE)
+          for (int r = 0; r < ROUNDS; r++) begin
+               int drain_order[$];
+               if (!randomize(num_reads, addrs) with { num_reads == TAG_NUM; }) `uvm_fatal("SEQ", "Randomization failed")
+               `uvm_info("STRESS", $sformatf("=== ROUND %0d: ISSUE ===", r), UVM_NONE)
+
+               // --------------------------------------
+               // 1) Issue full batch (fill all tags)
+               // --------------------------------------
+               for (int i = 0; i < READS_PER_ROUND; i++) begin
+                    program_read(i);
+                    drain_order.push_back(i);
+                    #($urandom_range(0,200));
+               end
+
+               // --------------------------------------
+               // 2) Wait for AXI to complete
+               // --------------------------------------
+               #5000;
+
+               // --------------------------------------
+               // 3) Drain all reads (any order)
+               // --------------------------------------
+               drain_order.shuffle();
+               `uvm_info("STRESS",
+                         $sformatf("ROUND %0d drain order = %p", r, drain_order),
+                         UVM_NONE)
+
+               foreach (drain_order[j]) begin
+                    int tag = drain_order[j];
+                    set_tag_to_consume(tag);
+                    drain_and_check(tag);
+                    `uvm_info("STRESS",
+                              $sformatf("ROUND %0d tag=%0d consumed OK", r, tag),
+                              UVM_NONE)
+                    #($urandom_range(0,200));
+               end
+
+               `uvm_info("STRESS", $sformatf("=== ROUND %0d COMPLETE ===", r), UVM_NONE)
+
+               // Small gap to observe clean idle state
+               #1000;
           end
-          // --------------------------------------
-          // 1) Program N READ commands
-          // --------------------------------------
-          for (int i = 0; i < num_reads; i++) begin
-               program_read(i);
-               #50;
-          end
-          #500;
 
-          if ($test$plusargs("LINEAR_OUTSTANDING") || $test$plusargs("EXTREME_OUTSTANDING")) begin
-               if (!uvm_hdl_force("tb_top.dut.u_resp_collector.rready", 1'b1))`uvm_fatal("MULTI_READ", "Failed to force tb_top.axi_vif.RREADY=1")
-               `uvm_info("MULTI_READ", "Forced RREADY=1 (allow R beats / interleaving now)", UVM_NONE)
-          end
-          
-          #5000;
-
-          // --------------------------------------
-          // 2) Drain in ANY ORDER the test desires
-          // --------------------------------------
-
-          for (int i = 0; i < num_reads; i++)
-               drain_order.push_back(i);
-          drain_order.shuffle();                  // Allow randomized draining order
-
-          `uvm_info(get_type_name(), $sformatf("Drain order = %p", drain_order), UVM_NONE)
-
-          foreach (drain_order[j]) begin
-               int tag = drain_order[j];
-               set_tag_to_consume(tag);
-               // apb_read_reg(REG_RD_STATUS, status);
-               drain_and_check(tag);
-               `uvm_info("MULTI_READ", $sformatf("tag=%h Consumed OK", tag), UVM_NONE)
-          end
+          `uvm_info(get_type_name(), "STRESS test completed successfully", UVM_NONE)
      endtask
 
 endclass

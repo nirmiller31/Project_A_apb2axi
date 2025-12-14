@@ -93,10 +93,6 @@ module apb2axi_fifo_async #(
             rptr_gray_wrclk_1 <= '0;
             rptr_gray_wrclk_2 <= '0;
             wr_rdy            <= 1'b1;
-
-            `ifndef SYNTHESIS
-            $display("[%0t][FIFO_WR] RESET", $time);
-            `endif
         end
         else begin
             // sync read pointer into write domain
@@ -111,14 +107,6 @@ module apb2axi_fifo_async #(
                 mem[wptr_bin[PTR_W-1:0]] <= wr_data;
                 wptr_bin  <= wptr_bin_next;
                 wptr_gray <= wptr_gray_next;
-
-                `ifndef SYNTHESIS
-                $display("[%0t][FIFO_WR] PUSH data=%h idx=%0d",
-                         $time, wr_data, wptr_bin[PTR_W-1:0]);
-                if (^wr_data === 1'bx)
-                    $display("[%0t][FIFO_WR] *** WARNING: X DATA WRITTEN ***",
-                             $time);
-                `endif
             end
         end
     end
@@ -134,10 +122,6 @@ module apb2axi_fifo_async #(
             wptr_gray_rdclk_2 <= '0;
             rd_vld            <= 1'b0;
             rd_data           <= '0;
-
-            `ifndef SYNTHESIS
-            $display("[%0t][FIFO_RD] RESET", $time);
-            `endif
         end
         else begin
             // sync write pointer into read domain
@@ -151,16 +135,6 @@ module apb2axi_fifo_async #(
             if (!empty && rd_rdy) begin
                 rd_data <= mem[rptr_bin[PTR_W-1:0]];
                 rd_vld  <= '1;
-
-                `ifndef SYNTHESIS
-                $display("[%0t][FIFO_RD] POP  data=%h idx=%0d",
-                         $time, mem[rptr_bin[PTR_W-1:0]],
-                         rptr_bin[PTR_W-1:0]);
-                if (^mem[rptr_bin[PTR_W-1:0]] === 1'bx)
-                    $display("[%0t][FIFO_RD] *** WARNING: X DATA READ ***",
-                             $time);
-                `endif
-
                 rptr_bin  <= rptr_bin + 1'b1;
                 rptr_gray <= bin2gray(rptr_bin + 1'b1);
             end

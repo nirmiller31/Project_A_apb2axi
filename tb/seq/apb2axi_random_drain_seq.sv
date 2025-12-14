@@ -1,5 +1,5 @@
-class apb2axi_multiple_read_drain_seq extends apb2axi_base_seq;
-     `uvm_object_utils(apb2axi_multiple_read_drain_seq)
+class apb2axi_random_drain_seq extends apb2axi_base_seq;
+     `uvm_object_utils(apb2axi_random_drain_seq)
 
      localparam int REG_ADDR_LO   = 'h00;
      localparam int REG_ADDR_HI   = 'h04;
@@ -25,7 +25,7 @@ class apb2axi_multiple_read_drain_seq extends apb2axi_base_seq;
           }
      }
 
-     function new(string name = "apb2axi_multiple_read_drain_seq");
+     function new(string name = "apb2axi_random_drain_seq");
           super.new(name);
      endfunction
 
@@ -42,7 +42,7 @@ class apb2axi_multiple_read_drain_seq extends apb2axi_base_seq;
           // cmd[7:0]   = $urandom_range(0,15);
           cmd[7:0]   = $urandom_range(0,14);
 
-          `uvm_info("MULTI_READ", $sformatf("CMD RAW=0x%08h  | is_write=%0d size=%0d len=%0d", cmd, cmd[31], cmd[10:8], cmd[7:0]), UVM_NONE)
+          `uvm_info("RANDOM_DRAIN", $sformatf("CMD RAW=0x%08h  | is_write=%0d size=%0d len=%0d", cmd, cmd[31], cmd[10:8], cmd[7:0]), UVM_NONE)
 
           apb_write_reg(REG_CMD,     cmd);
           apb_write_reg(REG_ADDR_HI, addr_hi);
@@ -73,7 +73,7 @@ class apb2axi_multiple_read_drain_seq extends apb2axi_base_seq;
           st_resp  = status[13:12];
           st_err   = status[14];
           st_valid = status[15];
-          `uvm_info("MULTI_READ", $sformatf("RD_STATUS RAW=0x%08h  | valid=%0b err=%0b resp=%0d tag=%0d beats=%0d", status, st_valid, st_err, st_resp, st_tag, st_beats ), UVM_NONE)
+          `uvm_info("RANDOM_DRAIN", $sformatf("RD_STATUS RAW=0x%08h  | valid=%0b err=%0b resp=%0d tag=%0d beats=%0d", status, st_valid, st_err, st_resp, st_tag, st_beats ), UVM_NONE)
 
           total_words = ((st_beats == 1) ? 1 : (st_beats + 1)) * WORDS_PER_BEAT;
 
@@ -82,9 +82,9 @@ class apb2axi_multiple_read_drain_seq extends apb2axi_base_seq;
                exp32 = calc_expected_rdata(addrs[idx], word_idx);
 
                if (word32 !== exp32)
-               `uvm_error("MULTI_READ", $sformatf("addr=%h word_idx=%0d EXP=%h GOT=%h", addrs[idx], word_idx, exp32, word32))
+               `uvm_error("RANDOM_DRAIN", $sformatf("addr=%h word_idx=%0d EXP=%h GOT=%h", addrs[idx], word_idx, exp32, word32))
                else
-               `uvm_info("MULTI_READ", $sformatf("addr=%h word_idx=%0d OK: %h", addrs[idx], word_idx, word32), UVM_NONE)
+               `uvm_info("RANDOM_DRAIN", $sformatf("addr=%h word_idx=%0d OK: %h", addrs[idx], word_idx, word32), UVM_NONE)
 
                word_idx++;
           end
@@ -130,48 +130,67 @@ class apb2axi_multiple_read_drain_seq extends apb2axi_base_seq;
           end
 
           if (!uvm_config_db#(virtual axi_if)::get(null, "", "axi_vif", axi_vif)) begin
-               `uvm_fatal("MULTI_READ", "No axi_vif found in config_db for sequence")
+               `uvm_fatal("RANDOM_DRAIN", "No axi_vif found in config_db for sequence")
           end
 
-          `uvm_info(get_type_name(), $sformatf("Starting multi-read test, num_reads=%0d", num_reads), UVM_NONE)
+          `uvm_info(get_type_name(),
+                    $sformatf("Starting FLOW-4 multi-read test, num_reads=%0d", num_reads),
+                    UVM_NONE)
 
-          if ($test$plusargs("LINEAR_OUTSTANDING") || $test$plusargs("EXTREME_OUTSTANDING")) begin
-               if (!uvm_hdl_force("tb_top.dut.u_resp_collector.rready", 1'b0))`uvm_fatal("MULTI_READ", "Failed to force tb_top.axi_vif.RREADY=0")
-               `uvm_info("MULTI_READ", "Forced RREADY=0 (block R beats / interleaving now)", UVM_NONE)
-          end
-          // --------------------------------------
-          // 1) Program N READ commands
-          // --------------------------------------
+          // -------------------------------------------------
+          // Phase A: Block R channel, issue all reads (build backlog)
+          // -------------------------------------------------
+          if (!uvm_hdl_force("tb_top.dut.u_resp_collector.rready", 1'b0))
+               `uvm_fatal("RANDOM_DRAIN", "Failed to force tb_top.dut.u_resp_collector.rready=0")
+          `uvm_info("RANDOM_DRAIN", "Forced RREADY=0 (build backlog)", UVM_NONE)
+
           for (int i = 0; i < num_reads; i++) begin
                program_read(i);
-               #50;
+               #($urandom_range(0,200));
           end
-          #500;
 
-          if ($test$plusargs("LINEAR_OUTSTANDING") || $test$plusargs("EXTREME_OUTSTANDING")) begin
-               if (!uvm_hdl_force("tb_top.dut.u_resp_collector.rready", 1'b1))`uvm_fatal("MULTI_READ", "Failed to force tb_top.axi_vif.RREADY=1")
-               `uvm_info("MULTI_READ", "Forced RREADY=1 (allow R beats / interleaving now)", UVM_NONE)
+          // -------------------------------------------------
+          // Phase B: Burst-release RREADY to create interleaving chaos
+          // -------------------------------------------------
+          repeat ($urandom_range(6,12)) begin
+               int on_t  = $urandom_range(10,60);
+               int off_t = $urandom_range(40,200);
+
+               if (!uvm_hdl_force("tb_top.dut.u_resp_collector.rready", 1'b1))
+                    `uvm_fatal("RANDOM_DRAIN", "Failed to force tb_top.dut.u_resp_collector.rready=1")
+               #on_t;
+
+               if (!uvm_hdl_force("tb_top.dut.u_resp_collector.rready", 1'b0))
+                    `uvm_fatal("RANDOM_DRAIN", "Failed to force tb_top.dut.u_resp_collector.rready=0")
+               #off_t;
           end
-          
+
+          // Finally allow all remaining beats to pass
+          if (!uvm_hdl_force("tb_top.dut.u_resp_collector.rready", 1'b1))
+               `uvm_fatal("RANDOM_DRAIN", "Failed to force tb_top.dut.u_resp_collector.rready=1")
+          `uvm_info("RANDOM_DRAIN", "Forced RREADY=1 (drain remaining R beats)", UVM_NONE)
+
+          // Give time for completions to propagate through CQ/RDF/handler
           #5000;
 
-          // --------------------------------------
-          // 2) Drain in ANY ORDER the test desires
-          // --------------------------------------
-
+          // -------------------------------------------------
+          // Phase C: Drain in randomized order
+          // -------------------------------------------------
           for (int i = 0; i < num_reads; i++)
                drain_order.push_back(i);
-          drain_order.shuffle();                  // Allow randomized draining order
+          drain_order.shuffle();
 
           `uvm_info(get_type_name(), $sformatf("Drain order = %p", drain_order), UVM_NONE)
 
           foreach (drain_order[j]) begin
                int tag = drain_order[j];
                set_tag_to_consume(tag);
-               // apb_read_reg(REG_RD_STATUS, status);
                drain_and_check(tag);
-               `uvm_info("MULTI_READ", $sformatf("tag=%h Consumed OK", tag), UVM_NONE)
+               `uvm_info("RANDOM_DRAIN", $sformatf("tag=%0d Consumed OK", tag), UVM_NONE)
+               #($urandom_range(0,200));
           end
+
+          `uvm_info(get_type_name(), "FLOW-4 test completed successfully", UVM_NONE)
      endtask
 
 endclass

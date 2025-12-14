@@ -34,7 +34,6 @@ module apb2axi #(
      // -------------------------
      input  logic                  ACLK,
      input  logic                  ARESETn,
-
      // Write Address Channel
      output logic [AXI_ID_W-1:0]   AWID,
      output logic [AXI_ADDR_W-1:0] AWADDR,
@@ -46,20 +45,17 @@ module apb2axi #(
      output logic [2:0]            AWPROT,
      output logic                  AWVALID,
      input  logic                  AWREADY,
-
      // Write Data Channel
      output logic [AXI_DATA_W-1:0] WDATA,
      output logic [AXI_DATA_W/8-1:0] WSTRB,
      output logic                  WLAST,
      output logic                  WVALID,
      input  logic                  WREADY,
-
      // Write Response Channel
      input  logic [3:0]            BID,
      input  logic [1:0]            BRESP,
      input  logic                  BVALID,
      output logic                  BREADY,
-
      // Read Address Channel
      output logic [3:0]            ARID,
      output logic [AXI_ADDR_W-1:0] ARADDR,
@@ -71,7 +67,6 @@ module apb2axi #(
      output logic [2:0]            ARPROT,
      output logic                  ARVALID,
      input  logic                  ARREADY,
-
      // Read Data Channel
      input  logic [3:0]            RID,
      input  logic [AXI_DATA_W-1:0] RDATA,
@@ -113,17 +108,29 @@ module apb2axi #(
      logic                    rdf_reg_data_req;
      logic [TAG_W-1:0]        rdf_reg_data_req_tag;
      // =========================================================================
-     // Transaction Manager <-> Write FIFO
+     // Transaction Manager <-> Write CMD FIFO
      // =========================================================================
      logic                    wr_push_vld;
      logic                    wr_push_rdy;
      logic [CMD_ENTRY_W-1:0]  wr_push_data;
      // =========================================================================
-     // Write FIFO <-> Write Builder
+     // Transaction Manager <-> Write DATA FIFO
+     // =========================================================================
+     logic                    wd_push_vld;
+     logic                    wd_push_rdy;
+     logic [CMD_ENTRY_W-1:0]  wd_push_data;
+     // =========================================================================
+     // Write CMD FIFO <-> Write Builder
      // =========================================================================
      logic                    wr_pop_vld;
      logic                    wr_pop_rdy;
      logic [CMD_ENTRY_W-1:0]  wr_pop_data;
+     // =========================================================================
+     // Write DATA FIFO <-> Write Builder
+     // =========================================================================
+     logic                    wd_pop_vld;
+     logic                    wd_pop_rdy;
+     logic [DATA_ENTRY_W-1:0] wd_pop_data;
      // =========================================================================
      // Transaction Manager <-> Read FIFO
      // =========================================================================
@@ -296,10 +303,6 @@ module apb2axi #(
           .aclk(ACLK),
           .aresetn(ARESETn),
 
-          .wr_pop_vld(wr_pop_vld),
-          .wr_pop_rdy(wr_pop_rdy),
-          .wr_pop_data(wr_pop_data),
-
           .awid(AWID),
           .awaddr(AWADDR),
           .awlen(AWLEN),
@@ -315,7 +318,15 @@ module apb2axi #(
           .wstrb(WSTRB),
           .wlast(WLAST),
           .wvalid(WVALID),
-          .wready(WREADY)
+          .wready(WREADY),
+
+          .wr_pop_vld(wr_pop_vld),
+          .wr_pop_rdy(wr_pop_rdy),
+          .wr_pop_data(wr_pop_data),
+
+          .wd_pop_vld(wd_pop_vld),
+          .wd_pop_rdy(wd_pop_rdy),
+          .wd_pop_data(wd_pop_data)
      );
      // =========================================================================
      // READ BUILDER
@@ -347,7 +358,7 @@ module apb2axi #(
      apb2axi_fifo #(               // FIFO used to absorve Writes' backpressure
           .ENTRY_WIDTH(CMD_ENTRY_W),
           .FIFO_DEPTH(FIFO_DEPTH)
-     ) u_wr_apb2axi_fifo (
+     ) u_wr_cmd_apb2axi_fifo (
           .clk(ACLK),
           .resetn(ARESETn),
 
@@ -358,6 +369,21 @@ module apb2axi #(
           .pop_vld(wr_pop_vld),
           .pop_rdy(wr_pop_rdy),
           .pop_data(wr_pop_data)
+     );
+     apb2axi_fifo #(               // FIFO used to absorve Writes' backpressure
+          .ENTRY_WIDTH(DATA_ENTRY_W),
+          .FIFO_DEPTH(FIFO_DEPTH)
+     ) u_wr_data_apb2axi_fifo (
+          .clk(ACLK),
+          .resetn(ARESETn),
+
+          .push_vld(wd_push_vld),
+          .push_rdy(wd_push_rdy),
+          .push_data(wd_push_data),
+
+          .pop_vld(wd_pop_vld),
+          .pop_rdy(wd_pop_rdy),
+          .pop_data(wd_pop_data)
      );
      apb2axi_fifo #(               // FIFO used to absorve Read' backpressure
           .ENTRY_WIDTH(CMD_ENTRY_W),

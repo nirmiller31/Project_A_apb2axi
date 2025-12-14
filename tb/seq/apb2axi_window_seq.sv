@@ -1,5 +1,5 @@
-class apb2axi_multiple_read_drain_seq extends apb2axi_base_seq;
-     `uvm_object_utils(apb2axi_multiple_read_drain_seq)
+class apb2axi_window_seq extends apb2axi_base_seq;
+     `uvm_object_utils(apb2axi_window_seq)
 
      localparam int REG_ADDR_LO   = 'h00;
      localparam int REG_ADDR_HI   = 'h04;
@@ -25,7 +25,7 @@ class apb2axi_multiple_read_drain_seq extends apb2axi_base_seq;
           }
      }
 
-     function new(string name = "apb2axi_multiple_read_drain_seq");
+     function new(string name = "apb2axi_window_seq");
           super.new(name);
      endfunction
 
@@ -123,7 +123,14 @@ class apb2axi_multiple_read_drain_seq extends apb2axi_base_seq;
      // ============================================================
      virtual task body();
           bit [31:0] status;
-          int drain_order[$];
+          int issued = 0;
+          int drained = 0;
+
+          // Track which indices are outstanding
+          int outstanding[$];
+
+          // Sliding window size (tunable, <= FIFO_DEPTH)
+          const int WINDOW = (FIFO_DEPTH > 4) ? 4 : FIFO_DEPTH;
 
           if (!randomize()) begin
                `uvm_fatal("SEQ", "Randomization failed")
@@ -133,45 +140,77 @@ class apb2axi_multiple_read_drain_seq extends apb2axi_base_seq;
                `uvm_fatal("MULTI_READ", "No axi_vif found in config_db for sequence")
           end
 
-          `uvm_info(get_type_name(), $sformatf("Starting multi-read test, num_reads=%0d", num_reads), UVM_NONE)
+          `uvm_info(get_type_name(),
+                    $sformatf("Starting FLOW-1 multi-read test, num_reads=%0d window=%0d",
+                              num_reads, WINDOW),
+                    UVM_NONE)
 
-          if ($test$plusargs("LINEAR_OUTSTANDING") || $test$plusargs("EXTREME_OUTSTANDING")) begin
-               if (!uvm_hdl_force("tb_top.dut.u_resp_collector.rready", 1'b0))`uvm_fatal("MULTI_READ", "Failed to force tb_top.axi_vif.RREADY=0")
-               `uvm_info("MULTI_READ", "Forced RREADY=0 (block R beats / interleaving now)", UVM_NONE)
+          // -------------------------------------------------
+          // Main loop: overlap issue + drain
+          // -------------------------------------------------
+          while (drained < num_reads) begin
+               bit do_issue;
+               bit do_drain;
+
+               // Decide what actions are legal
+               do_issue = (issued < num_reads) &&
+                         (outstanding.size() < WINDOW);
+
+               do_drain = (outstanding.size() > 0);
+
+               // Randomly choose action when both possible
+               if (do_issue && do_drain) begin
+                    if ($urandom_range(0,1))
+                         do_drain = 0;
+                    else
+                         do_issue = 0;
+               end
+
+               // ----------------------------
+               // Issue a new read
+               // ----------------------------
+               if (do_issue) begin
+                    program_read(issued);
+                    outstanding.push_back(issued);
+
+                    `uvm_info("MULTI_READ",
+                              $sformatf("ISSUE idx=%0d (outstanding=%0d)",
+                                        issued, outstanding.size()),
+                              UVM_NONE)
+
+                    issued++;
+               end
+
+               // ----------------------------
+               // Drain one completed read
+               // ----------------------------
+               else if (do_drain) begin
+                    int sel;
+                    int tag;
+
+                    // Pick any outstanding read
+                    sel = $urandom_range(0, outstanding.size()-1);
+                    tag = outstanding[sel];
+
+                    set_tag_to_consume(tag);
+                    drain_and_check(tag);
+
+                    `uvm_info("MULTI_READ",
+                              $sformatf("DRAIN idx=%0d (outstanding=%0d)",
+                                        tag, outstanding.size()-1),
+                              UVM_NONE)
+
+                    outstanding.delete(sel);
+                    drained++;
+               end
+
+               // Random delay to break timing assumptions
+               #($urandom_range(0,200));
           end
-          // --------------------------------------
-          // 1) Program N READ commands
-          // --------------------------------------
-          for (int i = 0; i < num_reads; i++) begin
-               program_read(i);
-               #50;
-          end
-          #500;
 
-          if ($test$plusargs("LINEAR_OUTSTANDING") || $test$plusargs("EXTREME_OUTSTANDING")) begin
-               if (!uvm_hdl_force("tb_top.dut.u_resp_collector.rready", 1'b1))`uvm_fatal("MULTI_READ", "Failed to force tb_top.axi_vif.RREADY=1")
-               `uvm_info("MULTI_READ", "Forced RREADY=1 (allow R beats / interleaving now)", UVM_NONE)
-          end
-          
-          #5000;
-
-          // --------------------------------------
-          // 2) Drain in ANY ORDER the test desires
-          // --------------------------------------
-
-          for (int i = 0; i < num_reads; i++)
-               drain_order.push_back(i);
-          drain_order.shuffle();                  // Allow randomized draining order
-
-          `uvm_info(get_type_name(), $sformatf("Drain order = %p", drain_order), UVM_NONE)
-
-          foreach (drain_order[j]) begin
-               int tag = drain_order[j];
-               set_tag_to_consume(tag);
-               // apb_read_reg(REG_RD_STATUS, status);
-               drain_and_check(tag);
-               `uvm_info("MULTI_READ", $sformatf("tag=%h Consumed OK", tag), UVM_NONE)
-          end
+          `uvm_info(get_type_name(),
+                    "FLOW-1 test completed successfully",
+                    UVM_NONE)
      endtask
 
 endclass
