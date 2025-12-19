@@ -48,12 +48,17 @@ package apb2axi_pkg;
      // --------------------------------------------------
      // APB register map (byte offsets)
      // --------------------------------------------------
-     parameter logic [APB_ADDR_W-1:0] REG_ADDR_ADDR_LO      = 16'h00;
-     parameter logic [APB_ADDR_W-1:0] REG_ADDR_ADDR_HI      = 16'h04;
-     parameter logic [APB_ADDR_W-1:0] REG_ADDR_CMD          = 16'h08;
-     parameter logic [APB_ADDR_W-1:0] REG_ADDR_RD_STATUS    = 16'h0C;
-     parameter logic [APB_ADDR_W-1:0] REG_ADDR_RD_DATA      = 16'h10;
-     parameter logic [APB_ADDR_W-1:0] REG_ADDR_RD_TAG_SEL   = 16'h14;
+     parameter logic [APB_ADDR_W-1:0] REG_ADDR_ADDR_LO      = 16'h0000;
+     parameter logic [APB_ADDR_W-1:0] REG_ADDR_ADDR_HI      = 16'h0004;
+     parameter logic [APB_ADDR_W-1:0] REG_ADDR_CMD          = 16'h0008;
+     parameter logic [APB_ADDR_W-1:0] REG_ADDR_RD_TAG_SEL   = 16'h000C;
+
+     parameter logic [APB_ADDR_W-1:0] REG_ADDR_RD_STATUS    = 16'h0100; // BASE
+     parameter logic [APB_ADDR_W-1:0] REG_ADDR_RD_DATA      = 16'h0200; // BASE
+
+
+     parameter int TAG_STRIDE_BYTES = (APB_DATA_W/8);
+     parameter int TAG_WINDOW_BYTES = TAG_NUM * TAG_STRIDE_BYTES;
 
      // --------------------------------------------------
      // Directory entry

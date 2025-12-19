@@ -101,12 +101,12 @@ module apb2axi #(
      // =========================================================================
      // Register File <-> Response Handler
      // =========================================================================
-     logic                    rdf_reg_data_vld;
-     logic                    rdf_reg_data_rdy;     
-     logic [APB_DATA_W-1:0]   rdf_reg_data_out;
-     logic                    rdf_reg_data_last;
-     logic                    rdf_reg_data_req;
-     logic [TAG_W-1:0]        rdf_reg_data_req_tag;
+     logic [TAG_NUM-1:0]                     rdf_reg_data_vld;
+     logic [TAG_NUM-1:0]                     rdf_reg_data_rdy;     
+     logic [TAG_NUM-1:0][APB_DATA_W-1:0]     rdf_reg_data_out;
+     logic [TAG_NUM-1:0]                     rdf_reg_data_last;
+     // logic                    rdf_reg_data_req;
+     // logic [TAG_W-1:0]        rdf_reg_data_req_tag;
      // =========================================================================
      // Transaction Manager <-> Write CMD FIFO
      // =========================================================================
@@ -211,8 +211,8 @@ module apb2axi #(
           .rdf_reg_data_rdy(rdf_reg_data_rdy),
           .rdf_reg_data_out(rdf_reg_data_out),
           .rdf_reg_data_last(rdf_reg_data_last),
-          .rdf_reg_data_req(rdf_reg_data_req),
-          .rdf_reg_data_req_tag(rdf_reg_data_req_tag),
+          // .rdf_reg_data_req(rdf_reg_data_req),
+          // .rdf_reg_data_req_tag(rdf_reg_data_req_tag),
 
           .reg_dir_entry_consumed(reg_dir_entry_consumed),
 
@@ -235,8 +235,8 @@ module apb2axi #(
           .rsp_cq_pop_data(rsp_cq_pop_data),
           .rsp_cq_pop_rdy(rsp_cq_pop_rdy),
 
-          .rdf_reg_data_req(rdf_reg_data_req),
-          .rdf_reg_data_req_tag(rdf_reg_data_req_tag),
+          // .rdf_reg_data_req(rdf_reg_data_req),
+          // .rdf_reg_data_req_tag(rdf_reg_data_req_tag),
           .rdf_reg_data_rdy(rdf_reg_data_rdy),
           .rdf_reg_data_vld(rdf_reg_data_vld),
           .rdf_reg_data_out(rdf_reg_data_out),

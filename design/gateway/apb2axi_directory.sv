@@ -70,7 +70,7 @@ module apb2axi_directory #()(
                if (dir_mgr_pop_vld && dir_mgr_pop_rdy) begin                          // ALLOCATED -> PENDING (once popped to FIFO)
                     state[oldest_tag]                       <= ST_PENDING;
                end
-               if (cq_dir_cpl_vld && cq_dir_cpl_rdy) begin
+               if (cq_dir_cpl_vld && cq_dir_cpl_rdy) begin            // add semi-bytes support FIXME
                     state[cq_dir_cpl_entry.tag]             <= ST_COMPLETE;               // PENDING -> COMPLETE (after all data recieved)
                     entry[cq_dir_cpl_entry.tag].resp        <= cq_dir_cpl_entry.resp;
                     entry[cq_dir_cpl_entry.tag].num_beats   <= cq_dir_cpl_entry.num_beats;

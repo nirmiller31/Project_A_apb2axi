@@ -22,12 +22,10 @@ module apb2axi_reg #()(
      input directory_entry_t       reg_dir_entry,
      input entry_state_e           reg_dir_entry_state,
 
-     input  logic                  rdf_reg_data_vld,
-     output logic                  rdf_reg_data_rdy,     
-     input  logic [APB_DATA_W-1:0] rdf_reg_data_out,
-     input  logic                  rdf_reg_data_last,
-     output logic                  rdf_reg_data_req,
-     output logic [TAG_W-1:0]      rdf_reg_data_req_tag
+     input logic [TAG_NUM-1:0]                      rdf_reg_data_vld,
+     input logic [TAG_NUM-1:0][APB_DATA_W-1:0]      rdf_reg_data_out,
+     input logic [TAG_NUM-1:0]                      rdf_reg_data_last,
+     output logic [TAG_NUM-1:0]                     rdf_reg_data_rdy
 );
 
      // ----------------------------------------------------------------
@@ -48,45 +46,38 @@ module apb2axi_reg #()(
 
      logic                         sel_addr_lo, sel_addr_hi, sel_cmd, sel_rd_status, sel_rd_data, sel_tag_to_consume;
      logic                         addr_lo_we, addr_lo_we_d, addr_hi_we, cmd_we, tag_to_consume_we;
-     logic                         rd_status_re, rd_data_re;
 
-     logic                         new_tag_set;
+     localparam logic [APB_ADDR_W-1:0] RD_DATA_BASE   = REG_ADDR_RD_DATA;
+     localparam logic [APB_ADDR_W-1:0] RD_STATUS_BASE = REG_ADDR_RD_STATUS;
 
-     assign pslverr                = 1'b0;   // FIXME error handling
+     logic [TAG_W-1:0]             rd_tag;
+     logic [TAG_W-1:0]             st_tag;
+
+     logic                         sel_rd_data_tag;
+     logic                         sel_rd_status_tag;
+
+     logic                         rd_data_re;
+     logic                         rd_status_re;
+
+     assign sel_rd_data_tag        = (paddr >= RD_DATA_BASE)     && (paddr <  (RD_DATA_BASE + TAG_WINDOW_BYTES));
+     assign sel_rd_status_tag      = (paddr >= RD_STATUS_BASE)   && (paddr <  (RD_STATUS_BASE + TAG_WINDOW_BYTES));
+
+     assign rd_tag                 = (paddr - RD_DATA_BASE)      / TAG_STRIDE_BYTES;
+     assign st_tag                 = (paddr - RD_STATUS_BASE)    / TAG_STRIDE_BYTES;
+
+     assign rd_data_re             = psel && penable && !pwrite && sel_rd_data_tag;
+     assign rd_status_re           = psel && penable && !pwrite && sel_rd_status_tag;
      
-     assign sel_addr_lo            = ({paddr[4:2], 2'b00} == REG_ADDR_ADDR_LO);
-     assign sel_addr_hi            = ({paddr[4:2], 2'b00} == REG_ADDR_ADDR_HI);
-     assign sel_cmd                = ({paddr[4:2], 2'b00} == REG_ADDR_CMD);
-     assign sel_rd_status          = ({paddr[4:2], 2'b00} == REG_ADDR_RD_STATUS);
-     assign sel_rd_data            = ({paddr[4:2], 2'b00} == REG_ADDR_RD_DATA);
-     assign sel_tag_to_consume     = ({paddr[4:2], 2'b00} == REG_ADDR_RD_TAG_SEL);  
+     assign sel_addr_lo            = ({paddr[APB_ADDR_W-1:2], 2'b00} == REG_ADDR_ADDR_LO);
+     assign sel_addr_hi            = ({paddr[APB_ADDR_W-1:2], 2'b00} == REG_ADDR_ADDR_HI);
+     assign sel_cmd                = ({paddr[APB_ADDR_W-1:2], 2'b00} == REG_ADDR_CMD);
+     assign sel_tag_to_consume     = ({paddr[APB_ADDR_W-1:2], 2'b00} == REG_ADDR_RD_TAG_SEL);
 
      // Write enables for RW regs
      assign addr_lo_we             = psel & penable & pwrite & sel_addr_lo;
      assign addr_hi_we             = psel & penable & pwrite & sel_addr_hi;
      assign cmd_we                 = psel & penable & pwrite & sel_cmd;
      assign tag_to_consume_we      = psel & penable & pwrite & sel_tag_to_consume;
-
-     // READ enable for RD_STATUS (used for consume)
-     assign rd_status_re           = psel && penable && !pwrite && sel_rd_status;
-     assign rd_data_re             = psel && penable && !pwrite && sel_rd_data;
-
-     // ----------------------------------------------------------------
-     // APB read mux
-     // ----------------------------------------------------------------
-     always_comb begin
-          prdata = '0;
-          if (!pwrite && psel) begin
-               unique case (1'b1)
-                    sel_addr_lo:   prdata = addr_lo_rd_val;
-                    sel_addr_hi:   prdata = addr_hi_rd_val;
-                    sel_cmd:       prdata = cmd_rd_val;
-                    sel_rd_status: prdata = sts_rd_val;
-                    sel_rd_data:   prdata = data_rd_val;
-                    default:       prdata = '0;
-               endcase
-          end
-     end
 
      // ----------------------------------------------------------------
      // APB write mux
@@ -106,127 +97,89 @@ module apb2axi_reg #()(
           end
      end
 
-     assign rdf_reg_data_rdy                 = psel && penable && !pwrite && sel_rd_data;
-     assign new_tag_set                      = psel && penable && pwrite && sel_tag_to_consume;
-     assign reg_dir_tag_sel                  = tag_to_consume_rd_val;
-     assign data_rd_val                      = rdf_reg_data_out[APB_DATA_W-1:0];
-     assign sts_rd_val                       = {
-                                                  16'b0,
-                                                  reg_dir_entry.state == DIR_ST_DONE,       // bit 15
-                                                  reg_dir_entry.state == DIR_ST_ERROR,      // bit 14
-                                                  reg_dir_entry.resp,                       // [13:12]
-                                                  reg_dir_entry.num_beats,                  // [11:4]
-                                                  reg_dir_entry.tag                         // [3:0]
-                                             };
-     // Outputs for Directory fields
-     assign reg_dir_alloc_entry.is_write     = cmd_rd_val[DIR_ENTRY_ISWRITE_HI : DIR_ENTRY_ISWRITE_LO];     
-     assign reg_dir_alloc_entry.addr         = {addr_hi_rd_val, addr_lo_rd_val};
-     assign reg_dir_alloc_entry.len          = cmd_rd_val[DIR_ENTRY_LEN_HI : DIR_ENTRY_LEN_LO];
-     assign reg_dir_alloc_entry.size         = cmd_rd_val[DIR_ENTRY_SIZE_HI : DIR_ENTRY_SIZE_LO];
-     assign reg_dir_alloc_entry.burst        = '0;
-     assign reg_dir_alloc_entry.tag          = '0;
-     assign reg_dir_alloc_entry.resp         = '0;
-     assign reg_dir_alloc_entry.num_beats    = '0;
-     assign reg_dir_alloc_entry.state        = DIR_ST_EMPTY;
-
-     typedef enum logic [1:0] {
-          S_IDLE,
-          S_ARMED,
-          S_STATUS_READ,
-          S_DATA_READ
-     } apb_state_e;
-
-     apb_state_e state;
-
      // ----------------------------------------------------------------
-     // APB pready + RDF handshake + SW consume pulse  (FSM)
+     // APB read mux
      // ----------------------------------------------------------------
-     always_ff @(posedge pclk) begin
-          if (!presetn) begin
-               state                    <= S_IDLE;
-
-               pready                   <= 1'b1;
-               rdf_reg_data_req         <= 1'b0;
-               rdf_reg_data_req_tag     <= '0;
-
-               reg_dir_entry_consumed   <= 1'b0;
-          end else begin
-               pready                   <= 1'b1;           // pready_next = 1
-               rdf_reg_data_req         <= 1'b0;           // rdf_data_req_next = 0
-
-               reg_dir_entry_consumed   <= 1'b0;
-
-               unique case (state)
-
-                    // -------------------------
-                    // S_IDLE
-                    // -------------------------
-                    S_IDLE: begin
-                         if (psel && penable && pwrite && sel_tag_to_consume) begin       // Consumption starts with TAG set
-                              state <= S_STATUS_READ;
-                         end
-                    end
-
-                    // -------------------------
-                    // S_STATUS_READ
-                    // -------------------------
-                    S_STATUS_READ: begin
-                         if (psel && penable && pwrite && sel_tag_to_consume) begin       // Case we reset TAG
-                              state <= S_STATUS_READ;
-                         end
-                         else if (psel && penable && !pwrite && sel_rd_status) begin
-                              rdf_reg_data_req         <= 1'b1;
-                              rdf_reg_data_req_tag     <= tag_to_consume_rd_val;
-                              state                    <= S_ARMED;
-                         end
-                    end
-
-                    // -------------------------
-                    // S_ARMED
-                    // -------------------------
-                    S_ARMED: begin
-                         if (psel && penable && pwrite && sel_tag_to_consume) begin       // Case we reset TAG
-                              state <= S_STATUS_READ;
-                         end
-                         else if (rdf_reg_data_vld) begin                                 // Expecting data_vld after data_req
-                              state                    <= S_DATA_READ;
-                              pready                   <= 1'b1;
-                              rdf_reg_data_req         <= 1'b0;
-                         end
-                         else begin
-                              pready                   <= 1'b0;                           // Keep stalling if no valid data
-                         end
-                    end
-
-                    // -------------------------
-                    // S_DATA_READ
-                    // -------------------------
-                    S_DATA_READ: begin
-                         if (psel && penable && pwrite && sel_tag_to_consume) begin       // Case we reset TAG
-                              state <= S_STATUS_READ;
-                         end
-                         else if (psel && penable && !pwrite && sel_rd_data) begin        // Actual data read
-                              if (rdf_reg_data_vld) begin
-                                        pready <= 1'b0;                                   // Just Default
-                                   if (rdf_reg_data_last) begin
-                                        state                    <= S_IDLE;               // Finished consuming
-                                        reg_dir_entry_consumed   <= 1'b1;                 // Notify consumed
-                                   end
-                                   else begin                                             // Additional data available
-                                        state                    <= S_ARMED;              // Return to after data_req stage
-                                        rdf_reg_data_req         <= 1'b1;
-                                   end
-                              end
-                              // else: do nothing for now
-                         end
-                    end
-
-                    default: begin
-                         state                                   <= S_IDLE;
-                    end
+     always_comb begin
+          prdata = '0;
+          if (!pwrite && psel) begin
+               unique case (1'b1)
+                    sel_addr_lo:        prdata = addr_lo_rd_val;
+                    sel_addr_hi:        prdata = addr_hi_rd_val;
+                    sel_cmd:            prdata = cmd_rd_val;
+                    sel_rd_status_tag:  prdata = sts_rd_val;
+                    sel_rd_data_tag:    prdata = data_rd_val;
+                    default:            prdata = '0;
                endcase
           end
      end
+
+     // ----------------------------------------------------------------
+     // Directory selection (kept minimal: still via TAG_TO_CONSUME)
+     // ----------------------------------------------------------------
+     assign reg_dir_tag_sel = rd_status_re ? st_tag : tag_to_consume_rd_val[TAG_W-1:0];
+
+     assign sts_rd_val = {
+          16'b0,
+          reg_dir_entry.state == DIR_ST_DONE,       // bit 15
+          reg_dir_entry.state == DIR_ST_ERROR,      // bit 14
+          reg_dir_entry.resp,                       // [13:12]
+          reg_dir_entry.num_beats,                  // [11:4]
+          reg_dir_entry.tag                         // [3:0]
+     };
+
+     // ----------------------------------------------------------------
+     // RD_DATA streaming behavior (NEW, minimal):
+     //  - If valid: return head data and pop (one-hot rdy)
+     //  - If empty: return 0 and PSLVERR=1 (no pop)
+     // ----------------------------------------------------------------
+     always_comb begin
+          rdf_reg_data_rdy = '0;
+          pready           = 1'b1;     // no stalling in this option
+          pslverr          = 1'b0;
+
+          if (rd_data_re) begin
+               if (rdf_reg_data_vld[rd_tag]) begin
+                    rdf_reg_data_rdy[rd_tag] = 1'b1;   // POP on this APB read
+               end
+               else begin
+                    pslverr = 1'b1;                    // empty read -> error
+               end
+          end
+     end
+
+     // data returned
+     assign data_rd_val = rdf_reg_data_vld[rd_tag] ? rdf_reg_data_out[rd_tag] : '0;
+
+     // ----------------------------------------------------------------
+     // reg_dir_entry_consumed pulse:
+     //  - when SW successfully pops and that popped word is LAST for that tag
+     // ----------------------------------------------------------------
+     always_ff @(posedge pclk) begin
+          if (!presetn) begin
+               reg_dir_entry_consumed <= 1'b0;
+          end else begin
+               reg_dir_entry_consumed <= 1'b0;
+               if (rd_data_re && rdf_reg_data_vld[rd_tag] && rdf_reg_data_rdy[rd_tag]) begin
+                    if (rdf_reg_data_last[rd_tag]) begin
+                         reg_dir_entry_consumed <= 1'b1;
+                    end
+               end
+          end
+     end
+
+     // ----------------------------------------------------------------
+     // Outputs for Directory alloc entry
+     // ----------------------------------------------------------------
+     assign reg_dir_alloc_entry.is_write  = cmd_rd_val[DIR_ENTRY_ISWRITE_HI : DIR_ENTRY_ISWRITE_LO];
+     assign reg_dir_alloc_entry.addr      = {addr_hi_rd_val, addr_lo_rd_val};
+     assign reg_dir_alloc_entry.len       = cmd_rd_val[DIR_ENTRY_LEN_HI : DIR_ENTRY_LEN_LO];
+     assign reg_dir_alloc_entry.size      = cmd_rd_val[DIR_ENTRY_SIZE_HI : DIR_ENTRY_SIZE_LO];
+     assign reg_dir_alloc_entry.burst     = '0;
+     assign reg_dir_alloc_entry.tag       = '0;
+     assign reg_dir_alloc_entry.resp      = '0;
+     assign reg_dir_alloc_entry.num_beats = '0;
+     assign reg_dir_alloc_entry.state     = DIR_ST_EMPTY;
 
      // ----------------------------------------------------------------
      // Single-cycle reg_dir_alloc_vld on ADDR_LO write

@@ -4,8 +4,10 @@ class apb2axi_window_seq extends apb2axi_base_seq;
      localparam int REG_ADDR_LO   = 'h00;
      localparam int REG_ADDR_HI   = 'h04;
      localparam int REG_CMD       = 'h08;
-     localparam int REG_RD_STATUS = 'h0C;
-     localparam int REG_RD_DATA   = 'h10;
+     localparam int REG_RD_STATUS_BASE = 'h0100;
+     localparam int REG_RD_DATA_BASE   = 'h0200;
+
+     localparam int TAG_STRIDE_BYTES   = (APB_DATA_W/8);
 
      // Number of reads to issue (you control it)
      rand int unsigned num_reads;
@@ -66,7 +68,7 @@ class apb2axi_window_seq extends apb2axi_base_seq;
 
           // poll until valid (2-cycle hazard safe)
           // repeat (2) 
-          apb_read_reg(REG_RD_STATUS, status);
+          apb_read_reg(REG_RD_STATUS_BASE + 4*idx, status);
 
           st_tag   = status[3:0];
           st_beats = status[11:4];
@@ -78,7 +80,7 @@ class apb2axi_window_seq extends apb2axi_base_seq;
           total_words = ((st_beats == 1) ? 1 : (st_beats + 1)) * WORDS_PER_BEAT;
 
           for (int w = 0; w < total_words; w++) begin
-               apb_read_reg(REG_RD_DATA, word32);
+               apb_read_reg(REG_RD_DATA_BASE +TAG_STRIDE_BYTES*idx + 4*w, word32);
                exp32 = calc_expected_rdata(addrs[idx], word_idx);
 
                if (word32 !== exp32)
