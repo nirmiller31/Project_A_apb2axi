@@ -68,6 +68,7 @@ module tb_top;
           .AWREADY  (axi_vif.AWREADY),
 
           // Write data channel
+          .WID      (axi_vif.WID),
           .WDATA    (axi_vif.WDATA),
           .WSTRB    (axi_vif.WSTRB),
           .WLAST    (axi_vif.WLAST),
@@ -108,10 +109,16 @@ module tb_top;
           $fsdbDumpMDA();
      end
 
+     // initial begin
+     //      uvm_config_db#(virtual apb_if)::set(null, "*", "apb_vif", apb_vif);
+     //      uvm_config_db#(virtual axi_if)::set(null, "*", "axi_vif", axi_vif);
+     //      run_test("apb2axi_bringup_test");
+     // end
+
      initial begin
           uvm_config_db#(virtual apb_if)::set(null, "*", "apb_vif", apb_vif);
           uvm_config_db#(virtual axi_if)::set(null, "*", "axi_vif", axi_vif);
-          run_test("apb2axi_bringup_test");
+          run_test("apb2axi_test");
      end
 
 endmodule

@@ -24,6 +24,8 @@ class apb2axi_bringup_test extends apb2axi_base_test;
           apb2axi_window_seq                 window_seq;
           apb2axi_random_drain_seq           random_drain_seq;
           apb2axi_stress_seq                 stress_seq;
+          apb2axi_wr_sanity_seq              wr_sanity;
+          apb2axi_mul_wr_seq                 mul_wr;
 
           phase.raise_objection(this);
 
@@ -79,6 +81,18 @@ class apb2axi_bringup_test extends apb2axi_base_test;
                stress_seq         = apb2axi_stress_seq::type_id::create("stress_seq");
                stress_seq.m_env   = env;
                stress_seq.start(env.apb_ag.apb_seqr);
+          end
+          else if (seq_sel.tolower() == "write") begin
+               `uvm_info("BRINGUP_TEST", "Running WRITE Sanity bringup sequence", apb2axi_verbosity)
+               wr_sanity         = apb2axi_wr_sanity_seq::type_id::create("wr_sanity");
+               wr_sanity.m_env   = env;
+               wr_sanity.start(env.apb_ag.apb_seqr);
+          end  
+          else if (seq_sel.tolower() == "mul_wr") begin
+               `uvm_info("BRINGUP_TEST", "Running MUL_WR Sanity bringup sequence", apb2axi_verbosity)
+               mul_wr         = apb2axi_mul_wr_seq::type_id::create("mul_wr");
+               mul_wr.m_env   = env;
+               mul_wr.start(env.apb_ag.apb_seqr);
           end  
           else begin
                `uvm_info("BRINGUP_TEST", "Running (original) bringup sequence", apb2axi_verbosity)

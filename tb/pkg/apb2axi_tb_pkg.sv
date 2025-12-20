@@ -53,22 +53,28 @@ package apb2axi_tb_pkg;
      //  Sequences
      // ==========================================================
      `include "tb/seq/apb2axi_base_seq.sv"
-     `include "tb/seq/apb2axi_bringup_seq.sv"
-     `include "tb/seq/apb2axi_read_bringup_seq.sv"
-     `include "tb/seq/apb2axi_multiple_beat_read_seq.sv"
-     `include "tb/seq/apb2axi_multiple_read_drain_seq.sv"
-     `include "tb/seq/apb2axi_reconsume_same_tag_seq.sv"
-     `include "tb/seq/apb2axi_read_drain_seq.sv"
-     `include "tb/seq/apb2axi_window_seq.sv"
-     `include "tb/seq/apb2axi_random_drain_seq.sv"
-     `include "tb/seq/apb2axi_stress_seq.sv"
+     `include "tb/seq/apb2axi_read_seq.sv"
+     `include "tb/seq/apb2axi_write_seq.sv"
+     `include "tb/seq/apb2axi_e2e_seq.sv"
+     // `include "tb/seq/apb2axi_bringup_seq.sv"
+     // `include "tb/seq/apb2axi_read_bringup_seq.sv"
+     // `include "tb/seq/apb2axi_multiple_beat_read_seq.sv"
+     // `include "tb/seq/apb2axi_multiple_read_drain_seq.sv"
+     // `include "tb/seq/apb2axi_reconsume_same_tag_seq.sv"
+     // `include "tb/seq/apb2axi_read_drain_seq.sv"
+     // `include "tb/seq/apb2axi_window_seq.sv"
+     // `include "tb/seq/apb2axi_random_drain_seq.sv"
+     // `include "tb/seq/apb2axi_stress_seq.sv"
+     // `include "tb/seq/apb2axi_wr_sanity_seq.sv"
+     // `include "tb/seq/apb2axi_mul_wr_seq.sv"
 
      // ======================================================
      //  Tests
      // ======================================================
      `include "tb/tests/apb2axi_base_test.sv"
-     `include "tb/tests/sanity_bringup_test.sv"
-     `include "tb/tests/apb2axi_bringup_test.sv"
+     `include "tb/tests/apb2axi_test.sv"
+     // `include "tb/tests/sanity_bringup_test.sv"
+     // `include "tb/tests/apb2axi_bringup_test.sv"
 
      // ======================================================
      //  Helper Functions

@@ -46,10 +46,8 @@ class apb2axi_multiple_read_drain_seq extends apb2axi_base_seq;
 
           `uvm_info("MULTI_READ", $sformatf("CMD RAW=0x%08h  | is_write=%0d size=%0d len=%0d", cmd, cmd[31], cmd[10:8], cmd[7:0]), UVM_NONE)
 
-          // ============================================================
-          // [CHANGED] commit on CMD (your RTL alloc pulse is on CMD write)
-          // old order was: CMD, HI, LO
-          // new order is: LO, HI, CMD
+          // ============================================================  
+          // new order is: CMD, HI, LO
           // ============================================================
           apb_write_reg(REG_CMD,     cmd);
           apb_write_reg(REG_ADDR_HI, addr_hi);

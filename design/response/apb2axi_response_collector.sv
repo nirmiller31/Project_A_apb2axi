@@ -44,6 +44,7 @@ module apb2axi_response_collector #()(
     int read_idx;
 
     assign rready = rsp_rdf_push_rdy;
+    assign bready = 1;
 
     always_ff @(posedge aclk) begin
         if (!aresetn) begin

@@ -40,6 +40,7 @@ class apb2axi_env extends uvm_env;
           uvm_config_db#(virtual apb_if)::set(this, "apb_ag",  "apb_vif", apb_vif);
           uvm_config_db#(virtual axi_if)::set(this, "axi_ag",  "axi_vif", axi_vif);
           uvm_config_db#(virtual axi_if)::set(this, "axi_bfm", "axi_vif", axi_vif);
+          uvm_config_db#(axi3_slave_bfm)::set(uvm_root::get(), "*", "axi_bfm_h", axi_bfm);
 
           `uvm_info("ENV", "APB2AXI Environment built successfully.", apb2axi_verbosity)
 

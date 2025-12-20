@@ -35,6 +35,7 @@ interface axi_if #(
      // ----------------------------------------------------------
      // Write Data Channel (W)
      // ----------------------------------------------------------
+     logic [ID_WIDTH-1:0]    WID;
      logic [DATA_WIDTH-1:0]  WDATA;
      logic [STRB_WIDTH-1:0]  WSTRB;
      logic                   WLAST;
@@ -84,7 +85,7 @@ interface axi_if #(
           input  AWREADY,
 
           // Write data
-          output WDATA, WSTRB, WLAST, WVALID,
+          output WID, WDATA, WSTRB, WLAST, WVALID,
           input  WREADY,
 
           // Write response
@@ -108,7 +109,7 @@ interface axi_if #(
           output AWREADY,
 
           // Write data
-          input  WDATA, WSTRB, WLAST, WVALID,
+          input  WID, WDATA, WSTRB, WLAST, WVALID,
           output WREADY,
 
           // Write response

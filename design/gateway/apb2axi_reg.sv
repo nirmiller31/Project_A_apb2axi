@@ -16,7 +16,8 @@ module apb2axi_reg #()(
      output logic                  reg_dir_alloc_vld,
      output directory_entry_t      reg_dir_alloc_entry,
 
-     output logic                  reg_dir_entry_consumed,
+     output logic                  reg_rd_dir_entry_consumed,
+     output logic                  reg_wr_dir_entry_consumed,
 
      output logic [TAG_W-1:0]      reg_dir_tag_sel,
      input directory_entry_t       reg_dir_entry,
@@ -25,7 +26,11 @@ module apb2axi_reg #()(
      input logic [TAG_NUM-1:0]                      rdf_reg_data_vld,
      input logic [TAG_NUM-1:0][APB_DATA_W-1:0]      rdf_reg_data_out,
      input logic [TAG_NUM-1:0]                      rdf_reg_data_last,
-     output logic [TAG_NUM-1:0]                     rdf_reg_data_rdy
+     output logic [TAG_NUM-1:0]                     rdf_reg_data_rdy,
+
+     output logic                  wr_word_valid,   // change
+     output logic [TAG_W-1:0]      wr_word_tag,     // change
+     output logic [APB_DATA_W-1:0] wr_word_data        // change
 );
 
      // ----------------------------------------------------------------
@@ -47,26 +52,33 @@ module apb2axi_reg #()(
      logic                         sel_addr_lo, sel_addr_hi, sel_cmd, sel_rd_status, sel_rd_data, sel_tag_to_consume;
      logic                         addr_lo_we, addr_lo_we_d, addr_hi_we, cmd_we, tag_to_consume_we;
 
-     localparam logic [APB_ADDR_W-1:0] RD_DATA_BASE   = REG_ADDR_RD_DATA;
      localparam logic [APB_ADDR_W-1:0] RD_STATUS_BASE = REG_ADDR_RD_STATUS;
+     localparam logic [APB_ADDR_W-1:0] RD_DATA_BASE   = REG_ADDR_RD_DATA;
+     localparam logic [APB_ADDR_W-1:0] WR_DATA_BASE   = REG_ADDR_WR_DATA;
 
-     logic [TAG_W-1:0]             rd_tag;
      logic [TAG_W-1:0]             st_tag;
+     logic [TAG_W-1:0]             rd_tag;
+     logic [TAG_W-1:0]             wr_tag;
 
-     logic                         sel_rd_data_tag;
      logic                         sel_rd_status_tag;
+     logic                         sel_rd_data_tag;
+     logic                         sel_wr_data_tag;
 
-     logic                         rd_data_re;
      logic                         rd_status_re;
+     logic                         rd_data_re;
+     logic                         wr_data_we;
 
-     assign sel_rd_data_tag        = (paddr >= RD_DATA_BASE)     && (paddr <  (RD_DATA_BASE + TAG_WINDOW_BYTES));
      assign sel_rd_status_tag      = (paddr >= RD_STATUS_BASE)   && (paddr <  (RD_STATUS_BASE + TAG_WINDOW_BYTES));
+     assign sel_rd_data_tag        = (paddr >= RD_DATA_BASE)     && (paddr <  (RD_DATA_BASE + TAG_WINDOW_BYTES));
+     assign sel_wr_data_tag        = (paddr >= WR_DATA_BASE)     && (paddr <  (WR_DATA_BASE + TAG_WINDOW_BYTES));
 
-     assign rd_tag                 = (paddr - RD_DATA_BASE)      / TAG_STRIDE_BYTES;
      assign st_tag                 = (paddr - RD_STATUS_BASE)    / TAG_STRIDE_BYTES;
+     assign rd_tag                 = (paddr - RD_DATA_BASE)      / TAG_STRIDE_BYTES;
+     assign wr_tag                 = (paddr - WR_DATA_BASE)      / TAG_STRIDE_BYTES;
 
-     assign rd_data_re             = psel && penable && !pwrite && sel_rd_data_tag;
      assign rd_status_re           = psel && penable && !pwrite && sel_rd_status_tag;
+     assign rd_data_re             = psel && penable && !pwrite && sel_rd_data_tag;
+     assign wr_data_we             = psel && penable &&  pwrite && sel_wr_data_tag;
      
      assign sel_addr_lo            = ({paddr[APB_ADDR_W-1:2], 2'b00} == REG_ADDR_ADDR_LO);
      assign sel_addr_hi            = ({paddr[APB_ADDR_W-1:2], 2'b00} == REG_ADDR_ADDR_HI);
@@ -88,12 +100,18 @@ module apb2axi_reg #()(
                addr_hi_rd_val                                         <= '0;
                cmd_rd_val                                             <= '0;
                tag_to_consume_rd_val                                  <= '0;
+               wr_word_valid                                          <= '0;
+               wr_word_tag                                            <= '0;
+               wr_word_data                                           <= '0;
           end 
           else begin
                if (addr_lo_we)               addr_lo_rd_val           <= pwdata;
                if (addr_hi_we)               addr_hi_rd_val           <= pwdata;
                if (cmd_we)                   cmd_rd_val               <= pwdata;
                if (tag_to_consume_we)        tag_to_consume_rd_val    <= pwdata;
+               if (wr_data_we)               wr_word_data             <= pwdata;
+               if (wr_data_we)               wr_word_tag              <= wr_tag;
+               wr_word_valid                                          <= wr_data_we;
           end
      end
 
@@ -157,13 +175,18 @@ module apb2axi_reg #()(
      // ----------------------------------------------------------------
      always_ff @(posedge pclk) begin
           if (!presetn) begin
-               reg_dir_entry_consumed <= 1'b0;
+               reg_wr_dir_entry_consumed <= 1'b0;
+               reg_rd_dir_entry_consumed <= 1'b0;
           end else begin
-               reg_dir_entry_consumed <= 1'b0;
+               reg_wr_dir_entry_consumed <= 1'b0;
+               reg_rd_dir_entry_consumed <= 1'b0;
                if (rd_data_re && rdf_reg_data_vld[rd_tag] && rdf_reg_data_rdy[rd_tag]) begin
                     if (rdf_reg_data_last[rd_tag]) begin
-                         reg_dir_entry_consumed <= 1'b1;
+                         reg_rd_dir_entry_consumed <= 1'b1;
                     end
+               end
+               if (rd_status_re) begin
+                    reg_wr_dir_entry_consumed <= 1'b1;
                end
           end
      end

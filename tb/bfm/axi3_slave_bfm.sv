@@ -25,6 +25,14 @@ class axi3_slave_bfm extends uvm_component;
 
      virtual axi_if vif;
 
+     // ------------------------------------------------------------
+     // Memory Model
+     // ------------------------------------------------------------
+     localparam int                MEM_DEPTH = 4096;
+     typedef bit [AXI_DATA_W-1:0]  data_word_t;
+     data_word_t                   mem [0:MEM_DEPTH-1];
+     bit                           mem_written [0:MEM_DEPTH-1];
+
      // ---- Logging of read consumption order ----
      bit [AXI_ID_W-1:0] beat_order_q[$];   // one entry per R beat
      bit [AXI_ID_W-1:0] burst_order_q[$];  // one entry per completed burst
@@ -38,9 +46,7 @@ class axi3_slave_bfm extends uvm_component;
 
      read_mode_e read_mode = MODE_REGULAR;
 
-     // ------------------------------------------------------------
      // Queue for outstanding reads (extreme)
-     // ------------------------------------------------------------
      typedef struct packed {
           logic [AXI_ADDR_W-1:0] addr;
           logic [3:0]            len;
@@ -50,9 +56,7 @@ class axi3_slave_bfm extends uvm_component;
      } read_req_t;
 
      read_req_t read_q[$];
-     // ------------------------------------------------------------
      // Queue for interleaving reads (extreme)
-     // ------------------------------------------------------------
      typedef struct {
           logic [AXI_ADDR_W-1:0] addr;
           logic [3:0]            beats_left;  // remaining beats
@@ -65,13 +69,18 @@ class axi3_slave_bfm extends uvm_component;
      active_read_t active_reads[$];
 
      // ------------------------------------------------------------
-     // Memory model (word-addressable)
-     // AXI_DATA_W-wide words, depth = configurable
+     // Write mode
      // ------------------------------------------------------------
-     localparam int MEM_DEPTH = 4096;
-     typedef bit [AXI_DATA_W-1:0] data_word_t;
+     typedef struct {
+          logic [AXI_ADDR_W-1:0] addr;
+          logic [3:0]            beats_left;  // remaining beats
+          logic [2:0]            size;
+          logic [AXI_ID_W-1:0]   id;
+          int unsigned           mem_idx;     // pointer to memory
+     } active_write_t;
 
-     data_word_t mem [0:MEM_DEPTH-1];
+     active_write_t active_writes[$];
+     bit [AXI_ID_W-1:0] pending_b_ids[$];
 
      // ------------------------------------------------------------
      // Constructor
@@ -107,9 +116,9 @@ class axi3_slave_bfm extends uvm_component;
      // Initialize memory with deterministic pattern
      // ------------------------------------------------------------
      task automatic init_mem();
-          for (int i=0; i<MEM_DEPTH; i++) begin
-               mem[i]       = '0;
-               mem[i][31:0] = i;  // simple deterministic pattern
+          for (int i = 0; i < MEM_WORDS; i++) begin
+               mem[i]         = MEM[i];
+               mem_written[i] = 1'b0;
           end
      endtask
 
@@ -142,7 +151,7 @@ class axi3_slave_bfm extends uvm_component;
 
                // ======== SEND ONE R BEAT ========
                if (ar.mem_idx < MEM_DEPTH)
-                    rdata = MEM[ar.mem_idx];
+                    rdata = mem[ar.mem_idx];
                else
                     rdata = '0;
 
@@ -251,15 +260,43 @@ class axi3_slave_bfm extends uvm_component;
 
                // ========= WRITE ADDRESS =========
                if (vif.AWVALID && vif.AWREADY) begin
-                    fork
-                         automatic logic [AXI_ADDR_W-1:0]   awaddr = vif.AWADDR;
-                         automatic logic [3:0]              awlen  = vif.AWLEN;
-                         automatic logic [2:0]              awsize = vif.AWSIZE;
-                         automatic logic [AXI_ID_W-1:0]     awid   = vif.AWID;
-                         begin
-                              do_write(awaddr, awlen, awsize, awid);
+                    active_write_t wx;
+                    wx.addr       = vif.AWADDR;
+                    wx.beats_left = vif.AWLEN + 1;
+                    wx.size       = vif.AWSIZE;
+                    wx.id         = vif.AWID;
+                    wx.mem_idx    = addr2idx(vif.AWADDR);
+                    active_writes.push_back(wx);
+               end
+               // =========== WRITE DATA ===========
+               if (vif.WVALID && vif.WREADY) begin
+                    foreach (active_writes[i]) begin
+                         if (active_writes[i].id == vif.WID) begin
+                              int idx = active_writes[i].mem_idx % MEM_DEPTH;
+                              for (int b=0;b<AXI_DATA_W/8;b++)
+                                   if (vif.WSTRB[b])
+                                        mem[idx][8*b+:8] = vif.WDATA[8*b+:8];
+                              mem_written[idx] = 1'b1;
+
+                              active_writes[i].mem_idx++;
+                              active_writes[i].beats_left--;
+
+                              if (active_writes[i].beats_left==0) begin
+                                   pending_b_ids.push_back(active_writes[i].id);
+                                   active_writes.delete(i);
+                              end
+                              break;
                          end
-                    join_none
+                    end
+               end
+               // ========= WRITE RESPONSE =========
+               if (!vif.BVALID && pending_b_ids.size()!=0) begin
+                    vif.BID    <= pending_b_ids.pop_front();
+                    vif.BRESP  <= 2'b00;
+                    vif.BVALID <= 1'b1;
+               end
+               else if (vif.BVALID && vif.BREADY) begin
+                    vif.BVALID <= 0;
                end
           end
 
@@ -319,6 +356,27 @@ class axi3_slave_bfm extends uvm_component;
 
      function void report_phase(uvm_phase phase);
           string s;
+          int fd;
+          string fname = "axi_memory_dump.hex";
+
+          fd = $fopen(fname, "w");
+          if (!fd) begin
+               `uvm_error("AXI3_BFM", "Failed to open memory dump file")
+               return;
+          end
+
+          for (int i = 0; i < MEM_WORDS; i++) begin
+               $fwrite(fd,
+               "IDX %4d  ADDR 0x%016h  DATA 0x%016h  %s\n",
+               i,
+               MEM_BASE_ADDR + i*(AXI_DATA_W/8),
+               mem[i],
+               mem_written[i] ? "WRITTEN" : "INIT");
+          end
+
+          $fclose(fd);
+
+          `uvm_info("AXI3_BFM", $sformatf("Full AXI memory dumped to %s", fname), UVM_LOW)
 
           if (burst_order_q.size() > 0) begin
                s = "{";
@@ -341,5 +399,36 @@ class axi3_slave_bfm extends uvm_component;
                `uvm_info("AXI3_BFM", $sformatf("Beat-level RID order   = %s", s), apb2axi_verbosity)
           end
      endfunction
+
+
+function automatic bit peek_word64(input logic [63:0] addr,
+                                   output logic [AXI_DATA_W-1:0] data);
+  int unsigned idx;
+  idx = addr2idx(addr);
+
+  if (idx >= MEM_DEPTH) begin
+    data = '0;
+    return 0;
+  end
+
+  data = mem[idx];
+  return 1;
+endfunction
+
+task automatic dump_mem_to_file(string fname);
+  int fd;
+  fd = $fopen(fname, "w");
+  if (fd == 0) begin
+    `uvm_error("AXI3_BFM", $sformatf("Failed to open %s", fname))
+    return;
+  end
+
+  for (int i = 0; i < MEM_DEPTH; i++) begin
+    $fwrite(fd, "IDX %0d ADDR 0x%016h DATA 0x%0h\n",
+            i, (MEM_BASE_ADDR + (i*(AXI_DATA_W/8))), mem[i]);
+  end
+  $fclose(fd);
+  `uvm_info("AXI3_BFM", $sformatf("Dumped memory to %s", fname), UVM_LOW)
+endtask
 
 endclass

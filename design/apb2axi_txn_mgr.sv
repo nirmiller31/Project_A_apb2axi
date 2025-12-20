@@ -55,17 +55,4 @@ module apb2axi_txn_mgr #(
           end
      end
 
-
-     // Optional debug
-     // synthesis translate_off
-     always_ff @(posedge aclk) begin
-          if (dir_mgr_pop_vld && dir_mgr_pop_rdy) begin
-               $display("%t [TXN_MGR] %s FIFO", $time, dir_mgr_pop_entry.is_write ? "WR" : "RD");
-          end
-          if (dir_mgr_pop_vld && !dir_mgr_pop_rdy) begin
-               $display("%t [TXN_MGR] BLOCKED dir_mgr_pop_vld=1 is_write=%0b wr_rdy=%0b rd_rdy=%0b", $time, dir_mgr_pop_entry.is_write, wr_push_rdy, rd_push_rdy);
-          end
-     end
-     // synthesis translate_on
-
 endmodule

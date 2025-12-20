@@ -46,6 +46,7 @@ module apb2axi #(
      output logic                  AWVALID,
      input  logic                  AWREADY,
      // Write Data Channel
+     output logic [AXI_ID_W-1:0]   WID,
      output logic [AXI_DATA_W-1:0] WDATA,
      output logic [AXI_DATA_W/8-1:0] WSTRB,
      output logic                  WLAST,
@@ -82,10 +83,17 @@ module apb2axi #(
      logic                    reg_dir_alloc_vld;
      directory_entry_t        reg_dir_alloc_entry;
      logic                    reg_dir_alloc_rdy;
-     logic                    reg_dir_entry_consumed;
+     logic                    reg_rd_dir_entry_consumed;
+     logic                    reg_wr_dir_entry_consumed;
      logic [TAG_WIDTH-1:0]    reg_dir_tag_sel;
      directory_entry_t        reg_dir_entry;
      entry_state_e            reg_dir_entry_state;
+     // =========================================================================
+     // Register File -> Write packer (APB per-word stream)
+     // =========================================================================
+     logic                    wr_word_valid;      // change
+     logic [TAG_W-1:0]        wr_word_tag;        // change
+     logic [APB_DATA_W-1:0]   wr_word_data;       // change
      // =========================================================================
      // Directory <-> Transaction Manager
      // =========================================================================
@@ -116,9 +124,9 @@ module apb2axi #(
      // =========================================================================
      // Transaction Manager <-> Write DATA FIFO
      // =========================================================================
-     logic                    wd_push_vld;
-     logic                    wd_push_rdy;
-     logic [CMD_ENTRY_W-1:0]  wd_push_data;
+     logic                    wdf_pop_vld;
+     logic                    wdf_pop_rdy;
+     logic [DATA_ENTRY_W-1:0] wdf_pop_payload;
      // =========================================================================
      // Write CMD FIFO <-> Write Builder
      // =========================================================================
@@ -175,7 +183,8 @@ module apb2axi #(
           .reg_dir_alloc_entry(reg_dir_alloc_entry),
           .reg_dir_alloc_rdy(reg_dir_alloc_rdy),
 
-          .reg_dir_entry_consumed(reg_dir_entry_consumed),
+          .reg_rd_dir_entry_consumed(reg_rd_dir_entry_consumed),
+          .reg_wr_dir_entry_consumed(reg_wr_dir_entry_consumed),
 
           .reg_dir_tag_sel(reg_dir_tag_sel),
           .reg_dir_entry(reg_dir_entry),
@@ -211,14 +220,32 @@ module apb2axi #(
           .rdf_reg_data_rdy(rdf_reg_data_rdy),
           .rdf_reg_data_out(rdf_reg_data_out),
           .rdf_reg_data_last(rdf_reg_data_last),
-          // .rdf_reg_data_req(rdf_reg_data_req),
-          // .rdf_reg_data_req_tag(rdf_reg_data_req_tag),
 
-          .reg_dir_entry_consumed(reg_dir_entry_consumed),
+          .reg_rd_dir_entry_consumed(reg_rd_dir_entry_consumed),
+          .reg_wr_dir_entry_consumed(reg_wr_dir_entry_consumed),
 
           .reg_dir_tag_sel(reg_dir_tag_sel),
           .reg_dir_entry(reg_dir_entry),
-          .reg_dir_entry_state(reg_dir_entry_state)
+          .reg_dir_entry_state(reg_dir_entry_state),
+
+          .wr_word_valid(wr_word_valid),
+          .wr_word_tag  (wr_word_tag),
+          .wr_word_data (wr_word_data)
+     );
+     // =========================================================================
+     // WRITE PACKER
+     // =========================================================================
+     apb2axi_wr_packer u_wr_packer (
+          .pclk        (PCLK),
+          .presetn     (PRESETn),
+
+          .wr_word_valid(wr_word_valid),
+          .wr_word_tag  (wr_word_tag),
+          .wr_word_data (wr_word_data),
+
+          .wdf_pop_vld  (wdf_pop_vld),
+          .wdf_pop_rdy  (wdf_pop_rdy),
+          .wdf_pop_payload (wdf_pop_payload)
      );
      // =========================================================================
      // RESPONSE HANDLER
@@ -298,7 +325,6 @@ module apb2axi #(
      // WRITE BUILDER
      // =========================================================================
      apb2axi_write_builder #(
-          .FIFO_ENTRY_W (CMD_ENTRY_W)
      ) u_wr_builder (
           .aclk(ACLK),
           .aresetn(ARESETn),
@@ -314,6 +340,7 @@ module apb2axi #(
           .awvalid(AWVALID),
           .awready(AWREADY),
 
+          .wid(WID),
           .wdata(WDATA),
           .wstrb(WSTRB),
           .wlast(WLAST),
@@ -377,9 +404,9 @@ module apb2axi #(
           .clk(ACLK),
           .resetn(ARESETn),
 
-          .push_vld(wd_push_vld),
-          .push_rdy(wd_push_rdy),
-          .push_data(wd_push_data),
+          .push_vld(wdf_pop_vld),
+          .push_rdy(wdf_pop_rdy),
+          .push_data(wdf_pop_payload),
 
           .pop_vld(wd_pop_vld),
           .pop_rdy(wd_pop_rdy),

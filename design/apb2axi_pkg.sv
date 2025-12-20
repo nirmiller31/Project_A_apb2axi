@@ -19,6 +19,7 @@ package apb2axi_pkg;
      parameter int AXI_ID_W   = 4;      // AXI ID width
 
      parameter int AXI_LEN_W  = 4;      // AXI ID width
+     parameter int AXI_SIZE_W = 3;      // AXI ID width
 
      // --------------------------------------------------
      // Directory sizing
@@ -44,6 +45,8 @@ package apb2axi_pkg;
      // --------------------------------------------------
      parameter int MAX_BEATS_NUM   = 16;
      parameter int FIFO_DEPTH      = TAG_NUM;
+
+     parameter int APB_WORDS_PER_AXI_BEAT = (AXI_DATA_W / APB_DATA_W);
      
      // --------------------------------------------------
      // APB register map (byte offsets)
@@ -53,8 +56,9 @@ package apb2axi_pkg;
      parameter logic [APB_ADDR_W-1:0] REG_ADDR_CMD          = 16'h0008;
      parameter logic [APB_ADDR_W-1:0] REG_ADDR_RD_TAG_SEL   = 16'h000C;
 
-     parameter logic [APB_ADDR_W-1:0] REG_ADDR_RD_STATUS    = 16'h0100; // BASE
-     parameter logic [APB_ADDR_W-1:0] REG_ADDR_RD_DATA      = 16'h0200; // BASE
+     parameter logic [APB_ADDR_W-1:0] REG_ADDR_RD_STATUS    = 16'h0100;
+     parameter logic [APB_ADDR_W-1:0] REG_ADDR_RD_DATA      = 16'h0200;
+     parameter logic [APB_ADDR_W-1:0] REG_ADDR_WR_DATA      = 16'h0300;
 
 
      parameter int TAG_STRIDE_BYTES = (APB_DATA_W/8);
@@ -133,6 +137,7 @@ package apb2axi_pkg;
           logic [TAG_W-1:0]        tag;
           logic [AXI_DATA_W-1:0]   data;
           logic                    last;
+          logic [AXI_DATA_W/8-1:0] wstrb;
      } wr_entry_t;
      parameter int DATA_ENTRY_W = $bits(wr_entry_t);
 
