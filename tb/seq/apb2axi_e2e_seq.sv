@@ -51,6 +51,7 @@ class apb2axi_e2e_seq extends apb2axi_base_seq;
           bit [7:0] num_beats_hw;
           bit [APB_DATA_W-1:0] beat_words[APB_WORDS_PER_AXI_BEAT];
           bit [APB_DATA_W-1:0] got32, exp32;
+          bit slverr;
           bit [AXI_ADDR_W-1:0]     addrs[NUM_TXNS];
           int unsigned             bytes[NUM_TXNS];
           int drained[NUM_TXNS] = '{default: 0};
@@ -90,7 +91,7 @@ class apb2axi_e2e_seq extends apb2axi_base_seq;
                program_addr(txns[i].addr);
           end
 
-          #(200);
+          #($urandom_range(0, 5000));
 
           // ---------------------------------------------------------
           // 3) INTERLEAVED W SEND (BEAT GRANULARITY)
@@ -171,7 +172,13 @@ class apb2axi_e2e_seq extends apb2axi_base_seq;
 
                pick = eligible[$urandom_range(0, eligible.size()-1)];
 
-               pop_rd_apb_word(txns[pick].tag, got32);
+               pop_rd_apb_word(txns[pick].tag, got32, slverr);
+
+               if(slverr) begin
+                    #($urandom_range(10, 120));
+                    continue;
+               end
+
                exp32 = expected_word(txns[pick], drained[pick]);
 
                if (got32 !== exp32) `uvm_fatal("E2E_RD_CMP", $sformatf("READ MISMATCH TXN=%0d WORD=%0d", pick, drained[pick]))

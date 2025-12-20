@@ -133,7 +133,7 @@ module apb2axi_reg #()(
      end
 
      // ----------------------------------------------------------------
-     // Directory selection (kept minimal: still via TAG_TO_CONSUME)
+     // Directory selection (optional: via TAG_TO_CONSUME)
      // ----------------------------------------------------------------
      assign reg_dir_tag_sel = rd_status_re ? st_tag : tag_to_consume_rd_val[TAG_W-1:0];
 
@@ -147,13 +147,13 @@ module apb2axi_reg #()(
      };
 
      // ----------------------------------------------------------------
-     // RD_DATA streaming behavior (NEW, minimal):
+     // RD_DATA streaming behavior:
      //  - If valid: return head data and pop (one-hot rdy)
      //  - If empty: return 0 and PSLVERR=1 (no pop)
      // ----------------------------------------------------------------
      always_comb begin
           rdf_reg_data_rdy = '0;
-          pready           = 1'b1;     // no stalling in this option
+          pready           = 1'b1;
           pslverr          = 1'b0;
 
           if (rd_data_re) begin

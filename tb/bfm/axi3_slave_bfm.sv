@@ -221,7 +221,10 @@ class axi3_slave_bfm extends uvm_component;
                @(posedge vif.ACLK);
 
                // Always ready for address
-               vif.ARREADY <= 1;
+               if (read_mode == MODE_REGULAR)
+                    vif.ARREADY <= (active_reads.size() == 0);   // only accept when empty
+               else
+                    vif.ARREADY <= 1;
                vif.AWREADY <= 1;
 
                // Always ready for write data

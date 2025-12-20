@@ -40,13 +40,14 @@ class apb2axi_base_seq extends uvm_sequence #(apb_seq_item);
           finish_item(req);
      endtask
 
-     task automatic apb_read(bit [APB_ADDR_W-1:0] addr, output bit [APB_DATA_W-1:0] data);
+     task automatic apb_read(bit [APB_ADDR_W-1:0] addr, output bit [APB_DATA_W-1:0] data, output bit slverr);
           apb_seq_item req    = apb_seq_item::type_id::create("req");
           start_item(req);
           req.addr            = addr;
           req.write           = 1'b0;
           finish_item(req);
           data                = req.data;
+          slverr              = req.slverr;
      endtask
 
      // =================================================
@@ -168,8 +169,8 @@ class apb2axi_base_seq extends uvm_sequence #(apb_seq_item);
      // =================================================
      // Read data helpers
      // =================================================
-     task automatic pop_rd_apb_word(bit [TAG_W-1:0] tag, output bit [APB_DATA_W-1:0] data);
-          apb_read(tag_win_addr(REG_ADDR_RD_DATA, tag), data);
+     task automatic pop_rd_apb_word(bit [TAG_W-1:0] tag, output bit [APB_DATA_W-1:0] data, output bit slverr);
+          apb_read(tag_win_addr(REG_ADDR_RD_DATA, tag), data, slverr);
      endtask
 
      function automatic logic [AXI_DATA_W-1:0] pack_beat_from_apb_words(bit [APB_DATA_W-1:0] lo, bit [APB_DATA_W-1:0] hi);
@@ -185,8 +186,9 @@ class apb2axi_base_seq extends uvm_sequence #(apb_seq_item);
                                output bit [1:0] resp,
                                output bit [7:0] num_beats);
           bit [APB_REG_W-1:0] sts;
+          bit                 slverr;
 
-          apb_read(tag_win_addr(REG_ADDR_RD_STATUS, tag), sts);
+          apb_read(tag_win_addr(REG_ADDR_RD_STATUS, tag), sts, slverr);
 
           done                                         = sts[15];
           error                                        = sts[14];

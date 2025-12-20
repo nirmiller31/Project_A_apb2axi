@@ -74,6 +74,7 @@ class apb2axi_read_seq extends apb2axi_base_seq;
 
           bit [APB_DATA_W-1:0] got32;
           bit [APB_DATA_W-1:0] exp32;
+          bit slverr;
 
           bit done, error;
           bit [1:0] resp;
@@ -114,7 +115,7 @@ class apb2axi_read_seq extends apb2axi_base_seq;
                program_addr(txns[i].addr);
           end
 
-          #(5000);
+          #($urandom_range(0, 5000));
 
           // -----------------------------------------
           // 3) Randomized interleaved drain (APB-word granularity)
@@ -138,7 +139,13 @@ class apb2axi_read_seq extends apb2axi_base_seq;
                     `uvm_fatal("RD_SEQ", $sformatf("TAG %0d ERROR while draining resp=%0d",txns[pick_i].tag, resp))
                end
 
-			pop_rd_apb_word(txns[pick_i].tag, got32);
+			pop_rd_apb_word(txns[pick_i].tag, got32, slverr);
+
+               if(slverr) begin
+                    #($urandom_range(10, 120));
+                    `uvm_info("RD_AR",$sformatf("I jumped"), UVM_NONE)
+                    continue;
+               end
 
 			exp32 = calc_expected_rdata(txns[pick_i].addr, txns[pick_i].drained_words);
 

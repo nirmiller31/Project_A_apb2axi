@@ -45,6 +45,8 @@ class apb_driver extends uvm_driver #(apb_seq_item);
 
         @(posedge vif.PCLK);
         wait (vif.PRESETn);
+
+        req.slverr = 1'b0;
         
         // SETUP Phase
         vif.PSEL    <= 1;
@@ -60,6 +62,11 @@ class apb_driver extends uvm_driver #(apb_seq_item);
         // Wait for PREADY
         do @(posedge vif.PCLK); 
         while (!vif.PREADY);
+
+        req.slverr = vif.PSLVERR;
+        if (req.slverr) begin
+            `uvm_info("APB_DRIVER", $sformatf("APB SLVERR @0x%0h (write=%0b)", req.addr, req.write), apb2axi_verbosity)
+        end
 
         // READ: sample PRDATA IN THE SAME CYCLE
         if (!req.write) begin
