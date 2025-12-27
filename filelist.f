@@ -18,6 +18,23 @@
 +incdir+$PROJECT_HOME/tb/seq_item
 +incdir+$PROJECT_HOME/tb/tests
 
+// -------------------------
+// DesignWare (simulation models)
+// -------------------------
+// /eda/synopsys/2024-25/RHELx86/SYN_2024.09-SP2/dw/sim_ver/DW_fifo_s1_sf.v
+// /eda/synopsys/2024-25/RHELx86/SYN_2024.09-SP2/dw/sim_ver/DW_fifoctl_s1_sf.v
+// /eda/synopsys/2024-25/RHELx86/SYN_2024.09-SP2/dw/sim_ver/DW_ram_r_w_s_dff.v
+// /eda/synopsys/2024-25/RHELx86/SYN_2024.09-SP2/dw/sim_ver/DW_fifo_2c_df.v
+// /eda/synopsys/2024-25/RHELx86/SYN_2024.09-SP2/dw/sim_ver/DW_fifoctl_2c_df.v
+// /eda/synopsys/2024-25/RHELx86/SYN_2024.09-SP2/dw/sim_ver/DW_ram_r_w_2c_dff.v
+// DesignWare: make VCS search this directory for missing modules
+-y /eda/synopsys/2024-25/RHELx86/SYN_2024.09-SP2/dw/sim_ver
++libext+.v
+
+// DesignWare .inc include files (needed by some DW modules)
++incdir+/eda/synopsys/2024-25/RHELx86/SYN_2024.09-SP2/dw/sim_ver
++incdir+/eda/synopsys/2024-25/RHELx86/SYN_2024.09-SP2/dw/include
++incdir+/eda/synopsys/2024-25/RHELx86/SYN_2024.09-SP2/dw/sim_ver/include
 # ============================================================
 # RTL / Design files
 # ============================================================
@@ -26,7 +43,7 @@ $PROJECT_HOME/design/if/apb_if.sv
 $PROJECT_HOME/design/if/axi_if.sv
 $PROJECT_HOME/design/gateway/apb2axi_reg.sv
 $PROJECT_HOME/design/gateway/apb2axi_directory.sv
-// $PROJECT_HOME/design/gateway/apb2axi_gateway.sv
+$PROJECT_HOME/design/apb2axi_wr_packer.sv
 $PROJECT_HOME/design/apb2axi_fifo.sv
 $PROJECT_HOME/design/apb2axi_fifo_async.sv
 $PROJECT_HOME/design/builder/apb2axi_write_builder.sv
