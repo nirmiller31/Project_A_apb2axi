@@ -4,11 +4,19 @@ import apb2axi_tb_pkg::*;
 
 module tb_top;
 
+     `ifdef RESP_POLICY_WORST
+     localparam int DUT_RESP_POLICY = 1;
+     `else
+     localparam int DUT_RESP_POLICY = 0;
+     `endif
+
      logic          PCLK;
      logic          PRESETn;
 
      logic          ACLK;
      logic          ARESETn;
+
+     int unsigned rp;
 
      initial begin
           PCLK      = 0;
@@ -38,7 +46,9 @@ module tb_top;
           .ARESETn(ARESETn)
      );
 
-     apb2axi dut (
+     apb2axi #(
+          .RESP_POLICY(0)
+     ) dut (
           // ------------------ APB side ------------------
           .PCLK      (PCLK),
           .PRESETn   (PRESETn),
@@ -114,6 +124,8 @@ module tb_top;
      //      uvm_config_db#(virtual axi_if)::set(null, "*", "axi_vif", axi_vif);
      //      run_test("apb2axi_bringup_test");
      // end
+
+
 
      initial begin
           uvm_config_db#(virtual apb_if)::set(null, "*", "apb_vif", apb_vif);

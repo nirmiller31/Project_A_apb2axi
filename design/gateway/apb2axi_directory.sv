@@ -1,4 +1,11 @@
-
+/*------------------------------------------------------------------------------
+ * File          : apb2axi_directory.sv
+ * Project       : APB2AXI
+ * Author        : Nir Miller & Ido Oreg
+ * Description   : - Maintains a per-TAG directory table and state machine for outstanding transactions
+ *                 - Allocates the smallest free TAG, exposes per-TAG status/fields to APB, and pops oldest ALLOCATED to the manager
+ *                 - Updates entries on completion and frees TAGs once APB confirms the transaction was fully consumed
+ *------------------------------------------------------------------------------*/
 
 import apb2axi_pkg::*;
 
@@ -6,12 +13,12 @@ module apb2axi_directory #()(
      input  logic                       pclk,
      input  logic                       presetn,
 
-     input  logic                       reg_dir_alloc_vld,            // new descriptor available
-     input  directory_entry_t           reg_dir_alloc_entry,          // descriptor
-     output logic                       reg_dir_alloc_rdy,            // can accept?
+     input  logic                       reg_dir_alloc_vld,            // New descriptor available
+     input  directory_entry_t           reg_dir_alloc_entry,          // Descriptor
+     output logic                       reg_dir_alloc_rdy,            // Can accept?
 
-     input  logic                       reg_rd_dir_entry_consumed,       // APB says: done with this TAG (consumed)
-     input  logic                       reg_wr_dir_entry_consumed,       // APB says: done with this TAG (consumed)
+     input  logic                       reg_rd_dir_entry_consumed,    // APB says: done with this TAG (consumed)
+     input  logic                       reg_wr_dir_entry_consumed,    // APB says: done with this TAG (consumed)
 
      input  logic [TAG_W-1:0]           reg_dir_tag_sel,              // which TAG to inspect (status read)
      output directory_entry_t           reg_dir_entry,
@@ -74,16 +81,17 @@ module apb2axi_directory #()(
                     entry[free_tag].tag                     <= free_tag;
                     state[free_tag]                         <= ST_ALLOCATED;
                end
-               if (dir_mgr_pop_vld && dir_mgr_pop_rdy) begin                          // ALLOCATED -> PENDING (once popped to FIFO)
+               if (dir_mgr_pop_vld && dir_mgr_pop_rdy) begin                         // ALLOCATED -> PENDING (once popped to FIFO)
                     state[oldest_tag]                       <= ST_PENDING;
                end
                if (cq_dir_cpl_vld && cq_dir_cpl_rdy) begin            // add semi-bytes support FIXME
-                    state[cq_dir_cpl_entry.tag]             <= ST_COMPLETE;               // PENDING -> COMPLETE (after all data recieved)
+                    state[cq_dir_cpl_entry.tag]             <= ST_COMPLETE;          // PENDING -> COMPLETE (after all data recieved)
                     entry[cq_dir_cpl_entry.tag].resp        <= cq_dir_cpl_entry.resp;
                     entry[cq_dir_cpl_entry.tag].num_beats   <= cq_dir_cpl_entry.num_beats;
                     entry[cq_dir_cpl_entry.tag].state       <= cq_dir_cpl_entry.error ? DIR_ST_ERROR : DIR_ST_DONE;
+                    entry[cq_dir_cpl_entry.tag].err_beat_idx <= cq_dir_cpl_entry.err_beat_idx;
                end
-               if (state[reg_dir_tag_sel_d] == ST_COMPLETE) begin  // COMPLETE -> EMPTY (all consumed, can be cleared)
+               if (state[reg_dir_tag_sel_d] == ST_COMPLETE) begin                    // COMPLETE -> EMPTY (all consumed, can be cleared)
                     if(
                          (reg_rd_dir_entry_consumed & ~entry[reg_dir_tag_sel_d].is_write) |
                          (reg_wr_dir_entry_consumed &  entry[reg_dir_tag_sel_d].is_write)

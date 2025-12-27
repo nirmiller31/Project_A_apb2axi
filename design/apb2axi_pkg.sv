@@ -65,9 +65,19 @@ package apb2axi_pkg;
      parameter int TAG_WINDOW_BYTES = TAG_NUM * TAG_STRIDE_BYTES;
 
      // --------------------------------------------------
+     // AXI3 resp
+     // --------------------------------------------------
+     typedef enum logic [1:0] {
+          AXI_RESP_OKAY   = 2'b00,
+          AXI_RESP_EXOKAY = 2'b01,
+          AXI_RESP_SLVERR = 2'b10,
+          AXI_RESP_DECERR = 2'b11
+     } axi_resp_e;
+     parameter int AXI_RESP_W = $bits(axi_resp_e);
+
+     // --------------------------------------------------
      // Directory entry
      // --------------------------------------------------
-
      typedef enum logic [2:0] {
           DIR_ST_EMPTY,      // slot unused
           DIR_ST_STAGED,     // regs written but no commit yet (optional)
@@ -91,8 +101,9 @@ package apb2axi_pkg;
           logic [2:0]              size;
           logic [1:0]              burst;
           logic [TAG_W-1:0]        tag;
-          logic [1:0]              resp;
+          axi_resp_e               resp;
           logic [7:0]              num_beats;
+          logic [7:0]              err_beat_idx;
           dir_state_e              state;
      } directory_entry_t;
      parameter int CMD_ENTRY_W     = $bits(directory_entry_t);
@@ -103,9 +114,10 @@ package apb2axi_pkg;
      typedef struct packed {
           logic                    is_write; //1 = write completion (B) , 0 = read completion (R) 
           logic [TAG_W-1:0]        tag;
-          logic [1:0]              resp;
+          axi_resp_e               resp;
           logic                    error;
           logic [7:0]              num_beats;
+          logic [7:0]              err_beat_idx;
      } completion_entry_t;
      parameter int CPL_W           = $bits(completion_entry_t);
 
@@ -114,7 +126,7 @@ package apb2axi_pkg;
      // --------------------------------------------------
      typedef struct packed {
           logic [AXI_DATA_W-1:0]   data;
-          logic [1:0]              resp;
+          axi_resp_e               resp;
           logic                    last;
      } rd_beat_t;
      parameter int RD_BEAT_W = $bits(rd_beat_t);  
@@ -126,7 +138,7 @@ package apb2axi_pkg;
           logic [TAG_W-1:0]        tag;
           logic [AXI_DATA_W-1:0]   data;
           logic                    last;
-          logic [1:0]              resp;
+          axi_resp_e               resp;
      } rdf_entry_t;
      parameter int RDF_W = $bits(rdf_entry_t);
 

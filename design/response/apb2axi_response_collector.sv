@@ -1,13 +1,17 @@
 /*------------------------------------------------------------------------------
- * File          : response_collector.sv
+ * File          : apb2axi_response_collector.sv
  * Project       : APB2AXI
  * Author        : Nir Miller & Ido Oreg
- * Description   : Collects AXI3 responses (R/B), pushes data into RDF and
- *                 bundles completions into a completion FIFO (ACLK domain).
+ * Description   : - Collects AXI read (R) and write (B) channel responses
+ *                 - Pushes read data beats into the RDF with per-beat metadata
+ *                 - Bundles completed transactions into the completion FIFO
  *------------------------------------------------------------------------------*/
+
 import apb2axi_pkg::*;
 
-module apb2axi_response_collector #()(
+module apb2axi_response_collector #(
+    parameter int RESP_POLICY       = 0             // 0=FIRST_ERROR, 1=WORST_ERROR
+)(
     input  logic                    aclk,
     input  logic                    aresetn,
     // AXI Read Data Channel (R)
@@ -36,15 +40,36 @@ module apb2axi_response_collector #()(
     completion_entry_t cpl_reg;
 
     logic                           reads_inflight [TAG_NUM];
-    logic [TAG_W-1:0]               cur_rid        [TAG_NUM];
     logic [7:0]                     beat_cnt       [TAG_NUM];
-    logic                           r_error        [TAG_NUM];
-    logic [1:0]                     last_rresp     [TAG_NUM];
 
-    int read_idx;
+    logic                           err_seen       [TAG_NUM];
+    axi_resp_e                      err_resp       [TAG_NUM];
+    logic [7:0]                     err_beat_idx   [TAG_NUM];
 
-    assign rready = rsp_rdf_push_rdy;
-    assign bready = 1;
+    logic [TAG_W-1:0]               read_idx;
+
+    assign rready                   = rsp_rdf_push_rdy;
+    assign bready                   = 1'b1;
+
+    function automatic int resp_severity(axi_resp_e r);
+        case (r)
+            AXI_RESP_OKAY:   return 0;
+            AXI_RESP_EXOKAY: return 1;
+            AXI_RESP_SLVERR: return 2;
+            AXI_RESP_DECERR: return 3;
+            default:         return 0;
+        endcase
+    endfunction
+
+    function automatic string resp2s(logic [1:0] r);
+        case (r)
+            2'b00:      return "OKAY";
+            2'b01:      return "EXOKAY";
+            2'b10:      return "SLVERR";
+            2'b11:      return "DECERR";
+            default:    return "UNKN";
+        endcase
+    endfunction
 
     always_ff @(posedge aclk) begin
         if (!aresetn) begin
@@ -57,53 +82,102 @@ module apb2axi_response_collector #()(
             for (int i = 0; i < TAG_NUM; i++) begin
                 reads_inflight[i]   <= 1'b0;
                 beat_cnt[i]         <= '0;
-                r_error[i]          <= 1'b0;
-                last_rresp[i]       <= 2'b00;
+                err_seen[i]         <= 1'b0;
+                err_resp[i]         <= AXI_RESP_OKAY;
+                err_beat_idx[i]     <= '0;
             end
         end
         else begin
-            rsp_rdf_push_vld        <= 1'b0;            // Default Values
-            rsp_cq_push_vld        <= 1'b0;
+            rsp_rdf_push_vld        <= 1'b0;
+            rsp_cq_push_vld         <= 1'b0;
+
             // ====================================================
             // READ DATA & COMPLETION HANDLING
             // ====================================================
             if (rvalid && rready) begin
-                read_idx                        = rid;
-                if (rsp_rdf_push_rdy) begin             // RDF push
-                    rdf_entry_t                 beat;
-                    beat.tag                    = rid;
-                    beat.data                   = rdata;
-                    beat.last                   = rlast;
-                    beat.resp                   = rresp;
+                logic [7:0]         curr_beat_idx;
+                axi_resp_e          rr;
+                logic               eff_seen;
+                axi_resp_e          eff_resp;
+                logic [7:0]         eff_idx;
 
-                    rsp_rdf_push_payload        <= beat;
-                    rsp_rdf_push_vld            <= 1'b1;
+                read_idx            = rid;
+                curr_beat_idx       = reads_inflight[read_idx] ? beat_cnt[read_idx] : 8'd0;
+                rr                  = axi_resp_e'(rresp);
+
+                eff_seen            = err_seen[read_idx];
+                eff_resp            = err_resp[read_idx];
+                eff_idx             = err_beat_idx[read_idx];
+
+                // RDF push
+                if (rsp_rdf_push_rdy) begin
+                    rdf_entry_t     beat;
+                    beat.tag        = rid;
+                    beat.data       = rdata;
+                    beat.last       = rlast;
+                    beat.resp       = rr;
+
+                    rsp_rdf_push_payload <= beat;
+                    rsp_rdf_push_vld     <= 1'b1;
                 end
-                if (!reads_inflight[read_idx]) begin    // Reset read in flight
-                    reads_inflight[read_idx]    <= 1'b1;
-                    beat_cnt[read_idx]          <= 8'd0;
-                    r_error[read_idx]           <= 1'b0;
+
+                // Start-of-transaction init / beat counter
+                if (!reads_inflight[read_idx]) begin
+                    reads_inflight[read_idx] <= 1'b1;
+                    beat_cnt[read_idx]       <= 8'd1;
+                    // reset error tracking for new txn
+                    err_seen[read_idx]       <= 1'b0;
+                    err_resp[read_idx]       <= AXI_RESP_OKAY;
+                    err_beat_idx[read_idx]   <= '0;
+                    // also reset effective view
+                    eff_seen = 1'b0;
+                    eff_resp = AXI_RESP_OKAY;
+                    eff_idx  = 8'h00;
                 end
                 else begin
-                    beat_cnt[read_idx]          <= beat_cnt[read_idx] + 1;
+                    beat_cnt[read_idx] <= beat_cnt[read_idx] + 1;
                 end
 
-                last_rresp[read_idx]            <= rresp;
-                if (rresp != 2'b00)             // Error detector FIXME handle errors
-                    r_error[read_idx]           <= 1'b1;
+                // ----------------------------
+                // ERROR TRACKING (effective)
+                // ----------------------------
+                if (rr != AXI_RESP_OKAY) begin
+                    if (!eff_seen) begin
+                        eff_seen = 1'b1;
+                        eff_resp = rr;
+                        eff_idx  = curr_beat_idx;
+                    end
+                    else if (RESP_POLICY != 0) begin
+                        int old_sev, new_sev;
+                        old_sev = resp_severity(eff_resp);
+                        new_sev = resp_severity(rr);
+                        if (new_sev > old_sev) begin
+                            eff_resp = rr;
+                            eff_idx  = curr_beat_idx;
+                        end
+                    end
+                end
+                err_seen[read_idx]     <= eff_seen;
+                err_resp[read_idx]     <= eff_resp;
+                err_beat_idx[read_idx] <= eff_idx;
 
-                if (rlast) begin                        // Handle last beat (end of read)
-                    cpl_reg.is_write            = 1'b0;
-                    cpl_reg.tag                 = rid;
-                    cpl_reg.resp                = last_rresp[read_idx];
-                    cpl_reg.error               = r_error[read_idx];
-                    cpl_reg.num_beats           = beat_cnt[read_idx] + 1;
-
-                    reads_inflight[read_idx]    <= 1'b0;
+                // ----------------------------
+                // COMPLETION ON RLAST
+                // ----------------------------
+                if (rlast) begin
+                    completion_entry_t cpl;
+                    cpl.is_write     = 1'b0;
+                    cpl.tag          = rid;
+                    cpl.error        = eff_seen;
+                    cpl.resp         = eff_seen ? eff_resp : AXI_RESP_OKAY;
+                    cpl.num_beats    = curr_beat_idx + 1;
+                    cpl.err_beat_idx = eff_seen ? eff_idx : 8'h00;
+                    
+                    reads_inflight[read_idx] <= 1'b0;
 
                     if (rsp_cq_push_rdy) begin
-                        rsp_cq_push_data       <= cpl_reg;
-                        rsp_cq_push_vld        <= 1'b1;       
+                        rsp_cq_push_data <= cpl;
+                        rsp_cq_push_vld  <= 1'b1;
                     end
                 end
             end
@@ -112,58 +186,20 @@ module apb2axi_response_collector #()(
             // WRITE COMPLETION HANDLING
             // ====================================================
             if (bvalid && bready) begin
-                completion_entry_t              bw_cpl;
-                bw_cpl.is_write                 = 1'b1;
-                bw_cpl.tag                      = bid;
-                bw_cpl.resp                     = bresp;
-                bw_cpl.error                    = (bresp != 2'b00);
-                bw_cpl.num_beats                = 8'd0;
+                completion_entry_t bw_cpl;
+                bw_cpl.is_write     = 1'b1;
+                bw_cpl.tag          = bid;
+                bw_cpl.resp         = axi_resp_e'(bresp);
+                bw_cpl.error        = (axi_resp_e'(bresp) != AXI_RESP_OKAY);
+                bw_cpl.num_beats    = 8'd0;
+                bw_cpl.err_beat_idx = 8'h00;
 
                 if (rsp_cq_push_rdy) begin
-                    rsp_cq_push_data           <= bw_cpl;
-                    rsp_cq_push_vld            <= 1'b1;
+                    rsp_cq_push_data <= bw_cpl;
+                    rsp_cq_push_vld  <= 1'b1;
                 end
             end
         end
     end
-
-// ==========================================================================================================================
-// =================================================== DEBUG infra (per-tag) =================================================
-// ==========================================================================================================================
-
-    logic rc_dbg;
-    initial begin
-        rc_dbg = $test$plusargs("APB2AXI_RC_DEBUG");
-        if (rc_dbg) $display("%t [RC_DBG] ENABLED (+APB2AXI_RC_DEBUG)", $time);
-    end
-
-    function automatic string resp2s(logic [1:0] r);
-        case (r) 
-            2'b00:      return "OKAY"; 
-            2'b01:      return "EXOKAY"; 
-            2'b10:      return "SLVERR"; 
-            2'b11:      return "DECERR"; 
-            default:    return "UNKN"; 
-        endcase
-    endfunction
-
-    always_ff @(posedge aclk) if (rc_dbg && aresetn) begin
-        if (rvalid && rready)
-            $display("%t [RESPONSE COLLECTOR] R  tag=%0d resp=%s last=%0b rdf_rdy=%0b", $time, rid, resp2s(rresp), rlast, rsp_rdf_push_rdy);
-
-        if (bvalid && bready)
-            $display("%t [RESPONSE COLLECTOR] B  tag=%0d resp=%s cpl_rdy=%0b", $time, bid, resp2s(bresp), rsp_cq_push_rdy);
-
-        if (rsp_rdf_push_vld)
-            $display("%t [RESPONSE COLLECTOR] RDF push tag=%0d last=%0b resp=%s", $time, rsp_rdf_push_payload.tag, rsp_rdf_push_payload.last, resp2s(rsp_rdf_push_payload.resp));
-
-        if (rsp_cq_push_vld) begin
-            completion_entry_t c; c = rsp_cq_push_data;
-            $display("%t [RESPONSE COLLECTOR] CPL push is_wr=%0b tag=%0d resp=%s err=%0b beats=%0d", $time, c.is_write, c.tag, resp2s(c.resp), c.error, c.num_beats);
-        end
-    end
-// ==========================================================================================================================
-// ==========================================================================================================================
-// ==========================================================================================================================
 
 endmodule

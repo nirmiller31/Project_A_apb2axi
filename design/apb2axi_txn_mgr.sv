@@ -2,11 +2,9 @@
  * File          : apb2axi_txn_mgr.sv
  * Project       : APB2AXI
  * Author        : Nir Miller & Ido Oreg
- * Description   : Simple Transaction Manager
- *                 - Takes committed gateway entries
+ * Description   : - Takes committed gateway entries
  *                 - Routes writes to WR FIFO, reads to RD FIFO
- *                 - All logic is in AXI clock domain (for now we assume
- *                   PCLK == ACLK; proper CDC can be added later).
+ *                 - All logic is in AXI clock domain
  *------------------------------------------------------------------------------*/
 
 import apb2axi_pkg::*;

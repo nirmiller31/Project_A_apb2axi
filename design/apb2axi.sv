@@ -9,11 +9,12 @@
 import apb2axi_pkg::*;
 
 module apb2axi #(
-     parameter int APB_ADDR_W = APB_ADDR_W,
-     parameter int APB_DATA_W = APB_DATA_W,
-     parameter int AXI_ADDR_W = AXI_ADDR_W,
-     parameter int AXI_DATA_W = AXI_DATA_W,
-     parameter int AXI_ID_W   = AXI_ID_W
+     parameter int APB_ADDR_W      = APB_ADDR_W,
+     parameter int APB_DATA_W      = APB_DATA_W,
+     parameter int AXI_ADDR_W      = AXI_ADDR_W,
+     parameter int AXI_DATA_W      = AXI_DATA_W,
+     parameter int AXI_ID_W        = AXI_ID_W,
+     parameter int RESP_POLICY     = 0
 )(
      // -------------------------
      // APB Slave Interface
@@ -277,6 +278,7 @@ module apb2axi #(
      // RESPONSE COLLECTOR
      // =========================================================================
      apb2axi_response_collector #(
+          .RESP_POLICY(RESP_POLICY)
      ) u_resp_collector (
           .aclk(ACLK),
           .aresetn(ARESETn),

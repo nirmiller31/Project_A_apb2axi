@@ -1,3 +1,12 @@
+/*------------------------------------------------------------------------------
+ * File          : apb2axi_reg.sv
+ * Project       : APB2AXI
+ * Author        : Nir Miller & Ido Oreg
+ * Description   : - Implements the APB register file and address decode (ADDR/CMD/STATUS/DATA windows)
+ *                 - Issues directory allocation on ADDR_LO write and supports per-TAG status/data access
+ *                 - Streams RD_DATA via per-TAG ready/valid pop and exports WR_DATA words (tag+data) to the write packer
+ *------------------------------------------------------------------------------*/
+
 import apb2axi_pkg::*;
 
 module apb2axi_reg #()(
@@ -138,7 +147,8 @@ module apb2axi_reg #()(
      assign reg_dir_tag_sel = rd_status_re ? st_tag : tag_to_consume_rd_val[TAG_W-1:0];
 
      assign sts_rd_val = {
-          16'b0,
+          8'b0,
+          reg_dir_entry.err_beat_idx,               // [23:16]
           reg_dir_entry.state == DIR_ST_DONE,       // bit 15
           reg_dir_entry.state == DIR_ST_ERROR,      // bit 14
           reg_dir_entry.resp,                       // [13:12]
@@ -200,8 +210,9 @@ module apb2axi_reg #()(
      assign reg_dir_alloc_entry.size      = cmd_rd_val[DIR_ENTRY_SIZE_HI : DIR_ENTRY_SIZE_LO];
      assign reg_dir_alloc_entry.burst     = '0;
      assign reg_dir_alloc_entry.tag       = '0;
-     assign reg_dir_alloc_entry.resp      = '0;
+     assign reg_dir_alloc_entry.resp      = AXI_RESP_OKAY;
      assign reg_dir_alloc_entry.num_beats = '0;
+     assign reg_dir_alloc_entry.err_beat_idx = '0;
      assign reg_dir_alloc_entry.state     = DIR_ST_EMPTY;
 
      // ----------------------------------------------------------------

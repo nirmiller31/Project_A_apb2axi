@@ -19,6 +19,8 @@ class apb2axi_test extends apb2axi_base_test;
           apb2axi_read_seq                   rd_seq;
           apb2axi_write_seq                  wr_seq;
           apb2axi_e2e_seq                    e2e_seq;
+          apb2axi_read_error_seq             rd_err_seq;
+          apb2axi_write_error_seq            wr_err_seq;
 
           phase.raise_objection(this);
 
@@ -44,6 +46,18 @@ class apb2axi_test extends apb2axi_base_test;
                e2e_seq                  = apb2axi_e2e_seq::type_id::create("read_drain_seq");
                e2e_seq.m_env            = env;
                e2e_seq.start(env.apb_ag.apb_seqr);
+          end
+          else if (seq_sel.tolower() == "read_error") begin
+               `uvm_info("APB2AXI_TEST", "Running [READ ERROR] sequence", UVM_NONE)
+               rd_err_seq               = apb2axi_read_error_seq::type_id::create("rd_err_seq");
+               rd_err_seq.m_env         = env;
+               rd_err_seq.start(env.apb_ag.apb_seqr);
+          end
+          else if (seq_sel.tolower() == "write_error") begin
+               `uvm_info("APB2AXI_TEST", "Running [WRITE ERROR] sequence", UVM_NONE)
+               wr_err_seq               = apb2axi_write_error_seq::type_id::create("mulread_seq");
+               wr_err_seq.m_env         = env;
+               wr_err_seq.start(env.apb_ag.apb_seqr);
           end
 
           `uvm_info("APB2AXI_TEST", $sformatf("%s sequence finished", seq_sel), UVM_NONE)

@@ -1,3 +1,12 @@
+/*------------------------------------------------------------------------------
+ * File          : apb2axi_read_builder.sv
+ * Project       : APB2AXI
+ * Author        : Nir Miller & Ido Oreg
+ * Description   : - Pops read descriptors from the RD FIFO and drives AXI AR
+ *                 - Holds ARVALID until ARREADY handshake completes
+ *                 - Issues exactly one FIFO pop per accepted AR transaction (ACLK domain)
+ *------------------------------------------------------------------------------*/
+ 
 module apb2axi_read_builder #(
     parameter int FIFO_ENTRY_W = CMD_ENTRY_W
 )(

@@ -1,3 +1,12 @@
+/*------------------------------------------------------------------------------
+ * File          : apb2axi_response_handler.sv
+ * Project       : APB2AXI
+ * Author        : Nir Miller & Ido Oreg
+ * Description   : - Collects AXI read responses and completion records
+ *                 - Buffers read beats per TAG and slices AXI data into APB words
+ *                 - Drains read data to APB registers and signals directory completion
+ *------------------------------------------------------------------------------*/
+ 
 import apb2axi_pkg::*;
 
 module apb2axi_response_handler #()(

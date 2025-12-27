@@ -9,9 +9,9 @@
 //   * Real memory model
 //------------------------------------------------------------------------------
 // Modes:
-//   - refular (default)
-//   - outstanding (+LINEAR_OUTSTANDING)
-//   - extreme    (+EXTREME_OUTSTANDING)
+//   - regular           (default)
+//   - outstanding       (+LINEAR_OUTSTANDING)
+//   - extreme           (+EXTREME_OUTSTANDING)
 //------------------------------------------------------------------------------
 
 import uvm_pkg::*;
@@ -33,7 +33,6 @@ class axi3_slave_bfm extends uvm_component;
      data_word_t                   mem [0:MEM_DEPTH-1];
      bit                           mem_written [0:MEM_DEPTH-1];
 
-     // ---- Logging of read consumption order ----
      bit [AXI_ID_W-1:0] beat_order_q[$];   // one entry per R beat
      bit [AXI_ID_W-1:0] burst_order_q[$];  // one entry per completed burst
 
@@ -43,20 +42,23 @@ class axi3_slave_bfm extends uvm_component;
      typedef enum int { MODE_REGULAR = 0,
                          MODE_OUTSTANDING = 1,
                          MODE_EXTREME = 2 } read_mode_e;
-
      read_mode_e read_mode = MODE_REGULAR;
 
-     // Queue for outstanding reads (extreme)
-     typedef struct packed {
-          logic [AXI_ADDR_W-1:0] addr;
-          logic [3:0]            len;
-          logic [2:0]            size;
-          logic [AXI_ID_W-1:0]   id;
-          logic [1:0]            burst;
-     } read_req_t;
+     // ------------------------------------------------------------
+     // Error injection tables (DISABLED BY DEFAULT)
+     // ------------------------------------------------------------
+     localparam int unsigned     ID_NUM = (1 << AXI_ID_W);
 
-     read_req_t read_q[$];
-     // Queue for interleaving reads (extreme)
+     axi_resp_e                  rerr_map       [ID_NUM][256];   // [RID][beat_idx]
+     bit                         rerr_map_valid [ID_NUM];        // enable per RID
+
+     axi_resp_e                  berr_map       [ID_NUM];        // [BID] -> BRESP
+     bit                         berr_map_valid [ID_NUM];        // enable per BID
+     bit                         berr_one_shot  = 1'b1;
+
+     // ------------------------------------------------------------
+     // Read tracking
+     // ------------------------------------------------------------
      typedef struct {
           logic [AXI_ADDR_W-1:0] addr;
           logic [3:0]            beats_left;  // remaining beats
@@ -64,12 +66,12 @@ class axi3_slave_bfm extends uvm_component;
           logic [AXI_ID_W-1:0]   id;
           logic [1:0]            burst;
           int unsigned           mem_idx;     // pointer to memory
+          int unsigned           beat_idx;
      } active_read_t;
-
      active_read_t active_reads[$];
 
      // ------------------------------------------------------------
-     // Write mode
+     // Write tracking
      // ------------------------------------------------------------
      typedef struct {
           logic [AXI_ADDR_W-1:0] addr;
@@ -109,7 +111,15 @@ class axi3_slave_bfm extends uvm_component;
                read_mode = MODE_REGULAR;
                `uvm_info("AXI3_BFM", "Read mode: LINEAR (default)", apb2axi_verbosity)
           end
+
+          // initialize error injection (SAFE DEFAULT)
+          foreach (rerr_map[i,j])       rerr_map[i][j]      = AXI_RESP_OKAY;
+          foreach (rerr_map_valid[i])   rerr_map_valid[i]   = 1'b0;
+          foreach (berr_map[i])         berr_map[i]         = AXI_RESP_OKAY;
+          foreach (berr_map_valid[i])   berr_map_valid[i]   = 1'b0;
+
      endfunction
+
 
 
      // ------------------------------------------------------------
@@ -120,6 +130,43 @@ class axi3_slave_bfm extends uvm_component;
                mem[i]         = MEM[i];
                mem_written[i] = 1'b0;
           end
+     endtask
+
+
+     // ------------------------------------------------------------
+     // Public API for tests
+     // ------------------------------------------------------------
+     task automatic inject_read_error(
+          input logic [AXI_ID_W-1:0] id,
+          input int unsigned         beat_idx,
+          input axi_resp_e           resp
+     );
+          if (id >= ID_NUM)        `uvm_fatal("AXI3_BFM", $sformatf("inject_read_error: id=%0d out of range (ID_NUM=%0d)", id, ID_NUM))
+          if (beat_idx >= 256)     `uvm_fatal("AXI3_BFM", $sformatf("inject_read_error: beat_idx=%0d out of range (max 255)", beat_idx))
+
+          rerr_map[id][beat_idx]     = resp;
+          rerr_map_valid[id]         = 1'b1;
+          `uvm_info("AXI3_BFM", $sformatf("Injecting RRESP=%0d for RID=%0d at beat=%0d", resp, id, beat_idx), apb2axi_verbosity)
+     endtask
+
+     task automatic inject_write_error(
+          input logic [AXI_ID_W-1:0] id,
+          input axi_resp_e           resp
+     );
+          if (id >= ID_NUM) begin
+               `uvm_fatal("AXI3_BFM", $sformatf("inject_write_error: id=%0d out of range (ID_NUM=%0d)", id, ID_NUM))
+          end
+          berr_map[id]               = resp;
+          berr_map_valid[id]         = 1'b1;
+          `uvm_info("AXI3_BFM", $sformatf("Injecting BRESP=%0d for BID=%0d (one_shot=%0b)", resp, id, berr_one_shot), apb2axi_verbosity)
+     endtask
+
+     task automatic clear_write_error(input logic [AXI_ID_W-1:0] id);
+          if (id >= ID_NUM) begin
+               `uvm_fatal("AXI3_BFM", $sformatf("clear_write_error: id=%0d out of range (ID_NUM=%0d)", id, ID_NUM))
+          end
+          berr_map[id]               = AXI_RESP_OKAY;
+          berr_map_valid[id]         = 1'b0;
      endtask
 
      // ------------------------------------------------------------
@@ -151,17 +198,19 @@ class axi3_slave_bfm extends uvm_component;
 
                // ======== SEND ONE R BEAT ========
                if (ar.mem_idx < MEM_DEPTH)
-                    rdata = mem[ar.mem_idx];
+                    rdata     = mem[ar.mem_idx];
                else
-                    rdata = '0;
+                    rdata     = '0;
 
                `uvm_info("AXI3_BFM", $sformatf("TOOK READ: id=%d, idx=0x%0d rdata=%0h", ar.id, idx, rdata), apb2axi_verbosity)
 
-               vif.RID    <= ar.id;
-               vif.RDATA  <= rdata;
-               vif.RRESP  <= 2'b00;
-               vif.RLAST  <= (ar.beats_left == 1);
-               vif.RVALID <= 1'b1;
+               vif.RID        <= ar.id;
+               vif.RDATA      <= rdata;
+               vif.RRESP      <= AXI_RESP_OKAY;
+               if ((ar.id < ID_NUM) && rerr_map_valid[ar.id])
+                    vif.RRESP <= rerr_map[ar.id][ar.beat_idx];        // Error injection
+               vif.RLAST      <= (ar.beats_left == 1);
+               vif.RVALID     <= 1'b1;
 
                `uvm_info("AXI3_BFM", $sformatf("%t BFM_DRIVE_R rid=%0d rlast=%0b rvalid=%0b", $time, ar.id, (ar.beats_left == 1), vif.RVALID), apb2axi_verbosity)
 
@@ -169,7 +218,7 @@ class axi3_slave_bfm extends uvm_component;
                do @(posedge vif.ACLK);
                while (!vif.RREADY && vif.ARESETn);
 
-               vif.RVALID <= 0;
+               vif.RVALID     <= 0;
 
                beat_order_q.push_back(ar.id);
 
@@ -181,6 +230,7 @@ class axi3_slave_bfm extends uvm_component;
                     ar.mem_idx++;
 
                ar.beats_left--;
+               ar.beat_idx++;
 
                if (ar.beats_left == 0) begin
                     active_reads.delete(idx);
@@ -240,6 +290,7 @@ class axi3_slave_bfm extends uvm_component;
                     arx.id         = vif.ARID;
                     arx.burst      = vif.ARBURST;
                     arx.mem_idx    = addr2idx(vif.ARADDR);
+                    arx.beat_idx   = 0;
 
                     case (read_mode)
                          MODE_REGULAR: begin
@@ -294,8 +345,19 @@ class axi3_slave_bfm extends uvm_component;
                end
                // ========= WRITE RESPONSE =========
                if (!vif.BVALID && pending_b_ids.size()!=0) begin
-                    vif.BID    <= pending_b_ids.pop_front();
-                    vif.BRESP  <= 2'b00;
+                    logic [AXI_ID_W-1:0] id;
+                    axi_resp_e br;
+                    id = pending_b_ids.pop_front();
+                    br = AXI_RESP_OKAY;
+                    if (id < ID_NUM && berr_map_valid[id]) begin
+                         br = berr_map[id];
+                         if (berr_one_shot) begin
+                              berr_map_valid[id] = 1'b0; // auto-clear after first use
+                              berr_map[id]       = AXI_RESP_OKAY;
+                         end
+                    end
+                    vif.BID    <= id;
+                    vif.BRESP  <= br;
                     vif.BVALID <= 1'b1;
                end
                else if (vif.BVALID && vif.BREADY) begin
@@ -318,6 +380,8 @@ class axi3_slave_bfm extends uvm_component;
           int beats = awlen + 1;
           int base_word = awaddr >> $clog2(AXI_DATA_W/8);
           int idx; 
+
+          axi_resp_e br;
 
           `uvm_info("AXI3_BFM",
                $sformatf("WRITE: addr=0x%0h beats=%0d size=%0d id=%0d",
@@ -346,8 +410,16 @@ class axi3_slave_bfm extends uvm_component;
 
           // Send BRESP after all beats
           @(posedge vif.ACLK);
+          br = AXI_RESP_OKAY;
+          if (awid < ID_NUM && berr_map_valid[awid]) begin
+               br = berr_map[awid];
+               if (berr_one_shot) begin
+                    berr_map_valid[awid] = 1'b0;
+                    berr_map[awid]       = AXI_RESP_OKAY;
+               end
+          end
           vif.BID    <= awid;
-          vif.BRESP  <= 2'b00;
+          vif.BRESP  <= br[1:0];
           vif.BVALID <= 1;
 
           // Wait for BREADY
