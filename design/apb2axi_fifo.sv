@@ -34,14 +34,13 @@ module apb2axi_fifo #(
     logic pop_req_n;
 
     // ============================================================
-    // [CHANGE #1] ready/valid mapping
+    // ready/valid mapping
     // ============================================================
     assign push_rdy  = ~full;
     assign pop_vld   = ~empty;
     assign pop_data  = data_out;
 
     // ============================================================
-    // [CHANGE #2] DW uses ACTIVE-LOW requests
     //   - push when (push_vld && push_rdy)
     //   - pop  when (pop_vld  && pop_rdy)
     // ============================================================
@@ -49,7 +48,6 @@ module apb2axi_fifo #(
     assign pop_req_n  = ~(pop_vld  && pop_rdy);
 
     // ============================================================
-    // [CHANGE #3] instantiate DW_fifo_s1_sf
     //   - rst_mode=0 => async reset (matches your resetn style)
     //   - diag_n tied high (disabled)
     // ============================================================
