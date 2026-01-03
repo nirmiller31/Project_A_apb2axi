@@ -49,9 +49,9 @@ class apb2axi_multiple_read_drain_seq extends apb2axi_base_seq;
           // ============================================================  
           // new order is: CMD, HI, LO
           // ============================================================
-          apb_write_reg(REG_CMD,     cmd);
-          apb_write_reg(REG_ADDR_HI, addr_hi);
-          apb_write_reg(REG_ADDR_LO, addr_lo);
+          apb_write(REG_CMD,     cmd);
+          apb_write(REG_ADDR_HI, addr_hi);
+          apb_write(REG_ADDR_LO, addr_lo);
      endtask
 
      // ------------------------------
@@ -71,9 +71,9 @@ class apb2axi_multiple_read_drain_seq extends apb2axi_base_seq;
           const int WORDS_PER_BEAT = AXI_DATA_W / APB_DATA_W;
 
           // ============================================================
-          // [CHANGED] STATUS is per-tag window: BASE + idx*4
+          // STATUS is per-tag window: BASE + idx*4
           // ============================================================
-          apb_read_reg(REG_RD_STATUS_BASE + (idx * TAG_STRIDE_BYTES), status);
+          apb_read(REG_RD_STATUS_BASE + (idx * TAG_STRIDE_BYTES), status);
 
           st_tag   = status[3:0];
           st_beats = status[11:4];
@@ -93,7 +93,7 @@ class apb2axi_multiple_read_drain_seq extends apb2axi_base_seq;
                // ============================================================
                // APB read will POP one word for that tag (via rdf_reg_data_rdy[rd_tag])
                // ============================================================
-               apb_read_reg(REG_RD_DATA_BASE + (idx * TAG_STRIDE_BYTES), word32); // [CHANGED]
+               apb_read(REG_RD_DATA_BASE + (idx * TAG_STRIDE_BYTES), word32);
 
                exp32 = calc_expected_rdata(addrs[idx], word_idx);
 

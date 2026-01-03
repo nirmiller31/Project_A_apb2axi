@@ -44,9 +44,9 @@ class apb2axi_stress_seq extends apb2axi_base_seq;
 
           `uvm_info("RANDOM_DRAIN", $sformatf("CMD RAW=0x%08h  | is_write=%0d size=%0d len=%0d", cmd, cmd[31], cmd[10:8], cmd[7:0]), UVM_NONE)
 
-          apb_write_reg(REG_CMD,     cmd);
-          apb_write_reg(REG_ADDR_HI, addr_hi);
-          apb_write_reg(REG_ADDR_LO, addr_lo);   // commit_pulse
+          apb_write(REG_CMD,     cmd);
+          apb_write(REG_ADDR_HI, addr_hi);
+          apb_write(REG_ADDR_LO, addr_lo);   // commit_pulse
      endtask
 
      // ------------------------------
@@ -66,7 +66,7 @@ class apb2axi_stress_seq extends apb2axi_base_seq;
 
           // poll until valid (2-cycle hazard safe)
           // repeat (2) 
-          apb_read_reg(REG_RD_STATUS, status);
+          apb_read(REG_RD_STATUS, status);
 
           st_tag   = status[3:0];
           st_beats = status[11:4];
@@ -78,7 +78,7 @@ class apb2axi_stress_seq extends apb2axi_base_seq;
           total_words = ((st_beats == 1) ? 1 : (st_beats + 1)) * WORDS_PER_BEAT;
 
           for (int w = 0; w < total_words; w++) begin
-               apb_read_reg(REG_RD_DATA, word32);
+               apb_read(REG_RD_DATA, word32);
                exp32 = calc_expected_rdata(addrs[idx], word_idx);
 
                if (word32 !== exp32)

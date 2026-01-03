@@ -113,12 +113,12 @@ bit ok;
                   i, txns[i].tag, txns[i].addr, AXI_LEN, BEATS),
         UVM_LOW)
 
-      apb_write_reg(REG_ADDR_HI, txns[i].addr[63:32]);
+      apb_write(REG_ADDR_HI, txns[i].addr[63:32]);
 
       // CMD: write=1, size=3 (8B), len=AXI_LEN
-      apb_write_reg(REG_CMD, (32'h1 << 31) | (32'd3 << 8) | AXI_LEN);
+      apb_write(REG_CMD, (32'h1 << 31) | (32'd3 << 8) | AXI_LEN);
 
-      apb_write_reg(REG_ADDR_LO, txns[i].addr[31:0]);
+      apb_write(REG_ADDR_LO, txns[i].addr[31:0]);
     end
 
     //-----------------------------------------
@@ -166,8 +166,8 @@ bit ok;
                   global_step, t, txns[t].tag, beat, BEATS-1, base, w0, w1),
         UVM_LOW)
 
-      apb_write_reg(base, w0);
-      apb_write_reg(base, w1);
+      apb_write(base, w0);
+      apb_write(base, w1);
 
       next_beat[t]++;
       total_remaining--;
@@ -189,8 +189,8 @@ bit ok;
       resp = 0;
 
       repeat (400) begin
-        // [CHANGED] Correct per-tag status window
-        apb_read_reg(REG_RD_STATUS_B + (txns[i].tag * 4), sts);
+        // Correct per-tag status window
+        apb_read(REG_RD_STATUS_B + (txns[i].tag * 4), sts);
 
         done = sts[15];
         err  = sts[14];

@@ -88,7 +88,7 @@ class apb2axi_read_drain_seq extends apb2axi_base_seq;
 
           #1000ns;
 
-          set_tag_to_consume(0);
+          // set_tag_to_consume(0);
 
           // 2) Poll RD_STATUS until valid
           do begin

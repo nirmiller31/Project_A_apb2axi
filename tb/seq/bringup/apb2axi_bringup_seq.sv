@@ -27,13 +27,13 @@ class apb2axi_bringup_seq extends apb2axi_base_seq;
           `uvm_info("BRINGUP_SEQ", "Starting APB2AXI bringup sequence", UVM_LOW)
 
           // 1) Program addr_hi = 0
-          apb_write_reg(16'h0004, 32'h0000_0000);
+          apb_write(16'h0004, 32'h0000_0000);
 
           // 2) Program CMD    = read, len=1, size=0  (you can tweak later)
-          apb_write_reg(16'h0008, 32'h0000_0001);
+          apb_write(16'h0008, 32'h0000_0001);
 
           // 3) Program addr_lo and trigger commit_pulse
-          apb_write_reg(16'h0000, 32'h0000_1000);
+          apb_write(16'h0000, 32'h0000_1000);
 
           if (m_env == null)
                `uvm_fatal("BRINGUP_SEQ", "m_env is NULL – test must set it")

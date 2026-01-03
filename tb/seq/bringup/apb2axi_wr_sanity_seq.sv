@@ -55,31 +55,31 @@ class apb2axi_wr_sanity_seq extends apb2axi_base_seq;
     // len:      [7:0]    (0 for 1 beat)
     // --------------------------------------------
     
-    apb_write_reg(REG_ADDR_HI, addr[63:32]);
+    apb_write(REG_ADDR_HI, addr[63:32]);
 
     // is_write=1, size=3, len=0
-    apb_write_reg(REG_CMD, (32'h1 << 31) | (32'(3) << 8) | 32'(3));
+    apb_write(REG_CMD, (32'h1 << 31) | (32'(3) << 8) | 32'(3));
 
-    apb_write_reg(REG_ADDR_LO, addr[31:0]);
+    apb_write(REG_ADDR_LO, addr[31:0]);
 
     // --------------------------------------------
     // Push write data into WR_DATA window for TAG
     // (2 APB words => 1 AXI beat)
     // --------------------------------------------
-    apb_write_reg(REG_WR_DATA_B + tag*4, w0);
-    apb_write_reg(REG_WR_DATA_B + tag*4, w1);
-    apb_write_reg(REG_WR_DATA_B + tag*4, w2);
-    apb_write_reg(REG_WR_DATA_B + tag*4, w3);
-    apb_write_reg(REG_WR_DATA_B + tag*4, w4);
-    apb_write_reg(REG_WR_DATA_B + tag*4, w5);
-    apb_write_reg(REG_WR_DATA_B + tag*4, w6);
-    apb_write_reg(REG_WR_DATA_B + tag*4, w7);
+    apb_write(REG_WR_DATA_B + tag*4, w0);
+    apb_write(REG_WR_DATA_B + tag*4, w1);
+    apb_write(REG_WR_DATA_B + tag*4, w2);
+    apb_write(REG_WR_DATA_B + tag*4, w3);
+    apb_write(REG_WR_DATA_B + tag*4, w4);
+    apb_write(REG_WR_DATA_B + tag*4, w5);
+    apb_write(REG_WR_DATA_B + tag*4, w6);
+    apb_write(REG_WR_DATA_B + tag*4, w7);
 
     // --------------------------------------------
     // Poll RD_STATUS[tag] until done/error
     // --------------------------------------------
     repeat (100) begin
-      apb_read_reg(REG_RD_STATUS_B + tag*4, sts);
+      apb_read(REG_RD_STATUS_B + tag*4, sts);
 
       done = sts[15];
       err  = sts[14];

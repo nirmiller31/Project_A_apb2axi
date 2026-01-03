@@ -10,6 +10,9 @@ module tb_top;
      localparam int DUT_RESP_POLICY = 0;
      `endif
 
+     localparam time APB_CLK_DELAY = 5ns;
+     localparam time AXI_CLK_DELAY = 5ns;
+
      logic          PCLK;
      logic          PRESETn;
 
@@ -20,12 +23,12 @@ module tb_top;
 
      initial begin
           PCLK      = 0;
-          forever   #5ns PCLK = ~PCLK;
+          forever   #APB_CLK_DELAY PCLK = ~PCLK;
      end
 
      initial begin
           ACLK      = 0;
-          forever   #5ns ACLK = ~ACLK;
+          forever   #AXI_CLK_DELAY ACLK = ~ACLK;
      end
 
      initial begin
@@ -47,7 +50,7 @@ module tb_top;
      );
 
      apb2axi #(
-          .RESP_POLICY(0)
+          .RESP_POLICY(DUT_RESP_POLICY)
      ) dut (
           // ------------------ APB side ------------------
           .PCLK      (PCLK),

@@ -35,13 +35,13 @@ class apb2axi_read_bringup_seq extends apb2axi_base_seq;
         expected_idx = base_addr >> $clog2(AXI_DATA_W/8);  // matches BFM: mem[idx][31:0] = idx
 
         // 1) addr_hi = 0
-        apb_write_reg(16'h0004, 32'h0000_0000);
+        apb_write(16'h0004, 32'h0000_0000);
 
         // 2) CMD = read, len=1, size=0   (same encoding as your first bringup)
-        apb_write_reg(16'h000f, 32'h0000_0001);
+        apb_write(16'h000f, 32'h0000_0001);
 
         // 3) addr_lo = base_addr → commit_pulse
-        apb_write_reg(16'h0000, base_addr);
+        apb_write(16'h0000, base_addr);
 
         if (m_env == null) `uvm_fatal("READ_BRINGUP_SEQ", "m_env is NULL – test must set it before starting sequence")
 

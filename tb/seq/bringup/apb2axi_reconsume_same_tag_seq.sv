@@ -28,15 +28,15 @@ class apb2axi_reconsume_same_tag_seq extends apb2axi_base_seq;
           // 1) Issue a single READ (same encoding as logs)
           //--------------------------------------------------
           // size=3 (8B), len=5 → 0x00000305
-          apb_write_reg(CMD_ADDR,     32'h0000_0305);
-          apb_write_reg(ADDR_HI_ADDR, 32'h0000_0000);
-          apb_write_reg(ADDR_LO_ADDR, 32'h0000_1480); // commit_pulse
+          apb_write(CMD_ADDR,     32'h0000_0305);
+          apb_write(ADDR_HI_ADDR, 32'h0000_0000);
+          apb_write(ADDR_LO_ADDR, 32'h0000_1480); // commit_pulse
 
           //--------------------------------------------------
           // 2) Wait for completion: RD_STATUS.valid==1
           //--------------------------------------------------
           do begin
-          apb_read_reg(RD_STATUS_ADDR, status);
+          apb_read(RD_STATUS_ADDR, status);
           end while (!status[15]);
 
           tag   = status[3:0];
@@ -52,11 +52,11 @@ class apb2axi_reconsume_same_tag_seq extends apb2axi_base_seq;
           //--------------------------------------------------
           // 3) First legitimate drain of this TAG
           //--------------------------------------------------
-          apb_write_reg(TAG_SEL_ADDR, {28'h0, tag});      // TAG_TO_CONSUME
-          apb_read_reg (RD_STATUS_ADDR, status);          // arm REG FSM
+          apb_write(TAG_SEL_ADDR, {28'h0, tag});      // TAG_TO_CONSUME
+          apb_read (RD_STATUS_ADDR, status);          // arm REG FSM
 
           for (int i = 0; i < total_words; i++) begin
-          apb_read_reg(RD_DATA_ADDR, data);
+          apb_read(RD_DATA_ADDR, data);
           `uvm_info(get_type_name(),
                     $sformatf("First drain tag=%0d beat=%0d data=%08x",
                               tag, i, data),
@@ -66,8 +66,8 @@ class apb2axi_reconsume_same_tag_seq extends apb2axi_base_seq;
           //--------------------------------------------------
           // 4) Try to consume the SAME TAG again
           //--------------------------------------------------
-          apb_write_reg(TAG_SEL_ADDR, {28'h0, tag});
-          apb_read_reg (RD_STATUS_ADDR, status);
+          apb_write(TAG_SEL_ADDR, {28'h0, tag});
+          apb_read (RD_STATUS_ADDR, status);
 
           `uvm_info(get_type_name(),
                     $sformatf("Second RD_STATUS for same tag=%0d : 0x%08x (beats=%0d, done=%0b)",
@@ -75,7 +75,7 @@ class apb2axi_reconsume_same_tag_seq extends apb2axi_base_seq;
                     UVM_MEDIUM)
 
           for (int i = 0; i < beats; i++) begin
-          apb_read_reg(RD_DATA_ADDR, data);
+          apb_read(RD_DATA_ADDR, data);
           `uvm_info(get_type_name(),
                     $sformatf("Second drain attempt tag=%0d beat=%0d data=%08x",
                               tag, i, data),

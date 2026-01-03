@@ -384,6 +384,7 @@ module apb2axi #(
      // ============================================================
      // Request FIFO's
      // ============================================================
+     // ------------------------------------ FROM HERE THE OPTIONAL FIFO's ------------------------------------
      apb2axi_fifo #(               // FIFO used to absorve Writes' backpressure
           .ENTRY_WIDTH(CMD_ENTRY_W),
           .FIFO_DEPTH(FIFO_DEPTH)
@@ -429,6 +430,8 @@ module apb2axi #(
           .pop_rdy(rd_pop_rdy),
           .pop_data(rd_pop_data)
      );
+     // ------------------------------------ UNTIL HERE THE OPTIONAL FIFO's ------------------------------------
+
      // =========================================================================
      // ASYNCHRONOUS FIFO's
      // =========================================================================
@@ -462,5 +465,53 @@ module apb2axi #(
           .rd_data(rsp_rdf_pop_payload),
           .rd_rdy(rsp_rdf_pop_rdy)
      );
+
+     // // ------------------------------------ FROM HERE THE OPTIONAL ASYNC FIFO's ------------------------------------
+     // apb2axi_fifo_async #(               // FIFO used to absorve Writes' backpressure
+     //      .WIDTH(CMD_ENTRY_W)
+     // ) u_wr_cmd_apb2axi_fifo (
+     //      .wr_clk(PCLK),
+     //      .wr_resetn(PRESETn),
+     //      .wr_vld(wr_push_vld),
+     //      .wr_data(wr_push_data),
+     //      .wr_rdy(wr_push_rdy),
+
+     //      .rd_clk(ACLK),
+     //      .rd_resetn(ARESETn),
+     //      .rd_vld(wr_pop_vld),
+     //      .rd_data(wr_pop_data),
+     //      .rd_rdy(wr_pop_rdy)
+     // );
+     // apb2axi_fifo_async #(               // FIFO used to absorve Writes' backpressure
+     //      .WIDTH(DATA_ENTRY_W)
+     // ) u_wr_data_apb2axi_fifo (
+     //      .wr_clk(PCLK),
+     //      .wr_resetn(PRESETn),
+     //      .wr_vld(wdf_pop_vld),
+     //      .wr_data(wdf_pop_payload),
+     //      .wr_rdy(wdf_pop_rdy),
+
+     //      .rd_clk(ACLK),
+     //      .rd_resetn(ARESETn),
+     //      .rd_vld(wd_pop_vld),
+     //      .rd_data(wd_pop_data),
+     //      .rd_rdy(wd_pop_rdy)
+     // );
+     // apb2axi_fifo_async #(               // FIFO used to absorve Read' backpressure
+     //      .WIDTH(CMD_ENTRY_W)
+     // ) u_rd_apb2axi_fifo (
+     //      .wr_clk(PCLK),
+     //      .wr_resetn(PRESETn),
+     //      .wr_vld(rd_push_vld),
+     //      .wr_data(rd_push_data),
+     //      .wr_rdy(rd_push_rdy),
+
+     //      .rd_clk(ACLK),
+     //      .rd_resetn(ARESETn),
+     //      .rd_vld(rd_pop_vld),
+     //      .rd_data(rd_pop_data),
+     //      .rd_rdy(rd_pop_rdy)
+     // );
+     // // ------------------------------------ UNTIL HERE THE OPTIONAL ASYNC FIFO's ------------------------------------
 
 endmodule
