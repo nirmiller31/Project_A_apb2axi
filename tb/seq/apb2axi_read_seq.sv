@@ -14,7 +14,9 @@ class apb2axi_read_seq extends apb2axi_base_seq;
           bit [TAG_W-1:0]        tag;
           bit [AXI_ADDR_W-1:0]   addr;
           bit [AXI_LEN_W-1:0]    len;               // beats-1
+          bit [AXI_SIZE_W-1:0]   size;
           int unsigned           beats;             // len+1
+          int unsigned           apb_words_per_beat;
           int unsigned           total_apb_words;   // beats * APB_WORDS_PER_AXI_BEAT
           int unsigned           drained_words;     // APB words drained so far
      } rd_txn_t;
@@ -35,29 +37,55 @@ class apb2axi_read_seq extends apb2axi_base_seq;
      // =================================================
      // expected model
      // =================================================
-     function automatic bit [APB_DATA_W-1:0] calc_expected_rdata(bit [63:0] base_addr, int word_idx);
+     function automatic bit [APB_DATA_W-1:0] calc_expected_rdata(
+          bit [63:0]            base_addr,
+          bit [AXI_SIZE_W-1:0]  size,
+          int                   word_idx
+     );
+          int unsigned bytes_per_beat;
+          int unsigned apb_words_per_beat;
+          int unsigned beat_i;
+          int unsigned slice_i;
 
-          const int WORDS_PER_BEAT = AXI_DATA_W / APB_DATA_W;
-          int unsigned base_idx;
-          int unsigned axi_idx;
-          int unsigned word_in_beat;
-          mem_word_t beat;
+          bit [63:0] beat_addr;
+          bit [AXI_DATA_W-1:0] rdata64;
+          bit [APB_DATA_W-1:0] w;
 
-          base_idx     = addr2idx(base_addr);
-          axi_idx      = base_idx + (word_idx / WORDS_PER_BEAT);
-          word_in_beat = word_idx % WORDS_PER_BEAT;
+          // AXI semantics
+          bytes_per_beat     = (1 << int'(size));                 // 1,2,4,8 for size 0..3 (64b bus)
+          apb_words_per_beat = (bytes_per_beat + 3) / 4;          // ceil(bytes/4): 1 for 1/2/4B, 2 for 8B
 
-          if (axi_idx >= MEM_WORDS)
-               return '0;
+          beat_i  = word_idx / apb_words_per_beat;
+          slice_i = word_idx % apb_words_per_beat;
 
-          beat = MEM[axi_idx];
+          // Beat start address (INCR)
+          beat_addr = base_addr + (beat_i * bytes_per_beat);
 
-          case (word_in_beat)
-               0: return beat[31:0];
-               1: return beat[63:32];
-               default: return '0;
-          endcase
+          // Build expected RDATA (low bytes filled, rest zero)
+          rdata64 = '0;
+          for (int b = 0; b < int'(bytes_per_beat); b++) begin
+               bit [63:0] a;
+               int unsigned idx;
+               int unsigned byte_off;
+               bit [7:0]    byt;
 
+               a        = beat_addr + b;
+               idx      = addr2idx(a);          // your MEM is 8-byte words (>>3)
+               byte_off = a[2:0];               // byte within the 64-bit word
+
+               if (idx < MEM_WORDS)
+                    byt = MEM[idx][8*byte_off +: 8];
+               else
+                    byt = 8'h00;
+
+               rdata64[8*b +: 8] = byt;         // little-endian placement inside the beat
+          end
+
+          // Slice to APB 32-bit word
+          if (slice_i == 0) w = rdata64[31:0];
+          else              w = rdata64[63:32];
+
+          return w;
      endfunction
 
      virtual task body();
@@ -69,7 +97,6 @@ class apb2axi_read_seq extends apb2axi_base_seq;
 
           int eligible[$];
           int pick_i;
-          int last_pick;
           int tries;
 
           bit [APB_DATA_W-1:0] got32;
@@ -88,7 +115,6 @@ class apb2axi_read_seq extends apb2axi_base_seq;
           if (phase != null) phase.raise_objection(this);
 
           num_txns    = $urandom_range(1, NUM_TXNS_MAX);
-          last_pick   = -1;
           global_step = 0;
 
           `uvm_info("RD_SEQ", $sformatf("Start READ outstanding+interleaved : num_txns=%0d", num_txns), UVM_NONE)
@@ -97,21 +123,23 @@ class apb2axi_read_seq extends apb2axi_base_seq;
           // 1) Plan txns
           // -----------------------------------------
           for (int i = 0; i < int'(num_txns); i++) begin
-               txns[i].tag            = i[TAG_W-1:0];
-               txns[i].addr           = rand_addr_in_range_aligned();
-               txns[i].len            = $urandom_range(0, MAX_BEATS_NUM-2);
-               txns[i].beats          = axi_beats_from_len(txns[i].len);
-               txns[i].total_apb_words= txns[i].beats * apb_words_per_axi_beat();
-               txns[i].drained_words  = 0;
-               `uvm_info("RD_SEQ", $sformatf("PLAN: TXN=%0d TAG=%0d ADDR=0x%0h LEN=%0d (beats=%0d apb_words=%0d)",i, txns[i].tag, txns[i].addr, txns[i].len, txns[i].beats, txns[i].total_apb_words), UVM_NONE)
+               txns[i].tag             = i[TAG_W-1:0];
+               txns[i].addr            = rand_addr_in_range_aligned();
+               txns[i].len             = $urandom_range(0, MAX_BEATS_NUM-2);
+               txns[i].size            = $urandom_range(0, $clog2(AXI_DATA_W/8)); // 0..3 for 64b
+               txns[i].beats           = axi_beats_from_len(txns[i].len);
+               txns[i].apb_words_per_beat = apb_words_per_beat_from_size(txns[i].size);
+               txns[i].total_apb_words = txns[i].beats * txns[i].apb_words_per_beat;
+               txns[i].drained_words   = 0;
+               `uvm_info("RD_SEQ", $sformatf("PLAN: TXN=%0d TAG=%0d ADDR=0x%0h LEN=%0d SIZE=%0d (beats=%0d apb_words=%0d apb_words_per_beat=%0d)",i, txns[i].tag, txns[i].addr, txns[i].len, txns[i].size, txns[i].beats, txns[i].total_apb_words, txns[i].apb_words_per_beat), UVM_NONE)
           end
 
           // -----------------------------------------
           // 2) Issue all ARs first
           // -----------------------------------------
           for (int i = 0; i < int'(num_txns); i++) begin
-               `uvm_info("RD_AR",$sformatf("ISSUE_AR: TXN=%0d TAG=%0d ADDR=0x%0h LEN=%0d", i, txns[i].tag, txns[i].addr, txns[i].len), UVM_NONE)
-               program_read_cmd(txns[i].len);
+               `uvm_info("RD_AR",$sformatf("ISSUE_AR: TXN=%0d TAG=%0d ADDR=0x%0h LEN=%0d, SIZE=%0d", i, txns[i].tag, txns[i].addr, txns[i].len, txns[i].size), UVM_NONE)
+               program_read_cmd(txns[i].len, txns[i].size);
                program_addr(txns[i].addr);
           end
 
@@ -147,7 +175,7 @@ class apb2axi_read_seq extends apb2axi_base_seq;
                     continue;
                end
 
-			exp32 = calc_expected_rdata(txns[pick_i].addr, txns[pick_i].drained_words);
+			exp32 = calc_expected_rdata(txns[pick_i].addr, txns[pick_i].size, txns[pick_i].drained_words);
 
                drain_q.push_back('{
                     step    : global_step,
@@ -158,11 +186,11 @@ class apb2axi_read_seq extends apb2axi_base_seq;
                     exp32   : exp32
                });
 
-			`uvm_info("RD_DRAIN", $sformatf("DRAIN step=%0d TXN=%0d TAG=%0d word=%0d/%0d got=0x%08x exp=0x%08x", global_step, pick_i, txns[pick_i].tag, txns[pick_i].drained_words, txns[pick_i].total_apb_words-1, got32, exp32), UVM_NONE)
+               `uvm_info("RD_DRAIN", $sformatf("DRAIN step=%0d TXN=%0d TAG=%0d word=%0d/%0d size=%0d got=0x%08x exp=0x%08x", global_step, pick_i, txns[pick_i].tag, txns[pick_i].drained_words, txns[pick_i].total_apb_words-1, txns[pick_i].size, got32, exp32), UVM_NONE)
 
-			if (got32 !== exp32) begin
+               if (got32 !== exp32) begin
                     print_drain_order(drain_q);
-				`uvm_fatal("RD_CMP", $sformatf("MISMATCH TXN=%0d TAG=%0d addr=0x%0h word=%0d got=0x%08x exp=0x%08x", pick_i, txns[pick_i].tag, txns[pick_i].addr, txns[pick_i].drained_words, got32, exp32))
+                    `uvm_fatal("RD_CMP", $sformatf("MISMATCH TXN=%0d TAG=%0d addr=0x%0h size=%0d word=%0d got=0x%08x exp=0x%08x", pick_i, txns[pick_i].tag, txns[pick_i].addr, txns[pick_i].size, txns[pick_i].drained_words, got32, exp32))
                end
 
 			txns[pick_i].drained_words++;

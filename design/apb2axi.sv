@@ -84,7 +84,7 @@ module apb2axi #(
      logic                    reg_dir_alloc_vld;
      directory_entry_t        reg_dir_alloc_entry;
      logic                    reg_dir_alloc_rdy;
-     logic                    reg_rd_dir_entry_consumed;
+     logic [TAG_NUM-1:0]      reg_rd_dir_entry_consumed;
      logic                    reg_wr_dir_entry_consumed;
      logic [TAG_WIDTH-1:0]    reg_dir_tag_sel;
      directory_entry_t        reg_dir_entry;
@@ -107,6 +107,8 @@ module apb2axi #(
      logic                    cq_dir_cpl_vld;
      completion_entry_t       cq_dir_cpl_entry;
      logic                    cq_dir_cpl_rdy;
+
+     logic [TAG_NUM-1:0][2:0] dir_rsp_tag_size;
      // =========================================================================
      // Register File <-> Response Handler
      // =========================================================================
@@ -197,7 +199,9 @@ module apb2axi #(
 
           .cq_dir_cpl_vld(cq_dir_cpl_vld),
           .cq_dir_cpl_entry(cq_dir_cpl_entry),
-          .cq_dir_cpl_rdy(cq_dir_cpl_rdy)
+          .cq_dir_cpl_rdy(cq_dir_cpl_rdy),
+
+          .dir_rsp_tag_size(dir_rsp_tag_size)
      );
      // =========================================================================
      // REGISTER FILE
@@ -263,8 +267,6 @@ module apb2axi #(
           .rsp_cq_pop_data(rsp_cq_pop_data),
           .rsp_cq_pop_rdy(rsp_cq_pop_rdy),
 
-          // .rdf_reg_data_req(rdf_reg_data_req),
-          // .rdf_reg_data_req_tag(rdf_reg_data_req_tag),
           .rdf_reg_data_rdy(rdf_reg_data_rdy),
           .rdf_reg_data_vld(rdf_reg_data_vld),
           .rdf_reg_data_out(rdf_reg_data_out),
@@ -272,7 +274,9 @@ module apb2axi #(
 
           .cq_dir_cpl_vld(cq_dir_cpl_vld),
           .cq_dir_cpl_entry(cq_dir_cpl_entry),
-          .cq_dir_cpl_rdy(cq_dir_cpl_rdy)
+          .cq_dir_cpl_rdy(cq_dir_cpl_rdy),
+
+          .dir_rsp_tag_size(dir_rsp_tag_size)
      );
      // =========================================================================
      // RESPONSE COLLECTOR

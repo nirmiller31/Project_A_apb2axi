@@ -65,6 +65,7 @@ class apb2axi_base_seq extends uvm_sequence #(apb_seq_item);
           cmd[DIR_ENTRY_ISWRITE_HI]                    = is_write;
           cmd[DIR_ENTRY_SIZE_HI : DIR_ENTRY_SIZE_LO]   = size;
           cmd[DIR_ENTRY_LEN_HI : DIR_ENTRY_LEN_LO]     = len;
+          
           apb_write(REG_ADDR_CMD, cmd);
      endtask
 
@@ -72,8 +73,8 @@ class apb2axi_base_seq extends uvm_sequence #(apb_seq_item);
           program_cmd(1'b1, $clog2(AXI_DATA_W/8), len);
      endtask
 
-     task automatic program_read_cmd(bit [AXI_LEN_W-1:0] len);
-          program_cmd(1'b0, $clog2(AXI_DATA_W/8), len);
+     task automatic program_read_cmd(bit [AXI_LEN_W-1:0] len, bit [AXI_SIZE_W-1:0] size = $clog2(AXI_DATA_W/8));
+          program_cmd(1'b0, size, len);
      endtask
 
      // =================================================
@@ -85,6 +86,12 @@ class apb2axi_base_seq extends uvm_sequence #(apb_seq_item);
 
      function automatic int apb_words_per_axi_beat();
           return APB_WORDS_PER_AXI_BEAT;
+     endfunction
+
+     function automatic int unsigned apb_words_per_beat_from_size(bit [AXI_SIZE_W-1:0] size);
+          int unsigned bytes_per_beat;
+          bytes_per_beat = (1 << int'(size));
+          return (bytes_per_beat + (APB_DATA_W/8) - 1) / (APB_DATA_W/8);
      endfunction
 
      function automatic bit [AXI_ADDR_W-1:0] rand_addr_in_range_aligned();

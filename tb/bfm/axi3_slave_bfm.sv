@@ -29,6 +29,7 @@ class axi3_slave_bfm extends uvm_component;
      // Memory Model
      // ------------------------------------------------------------
      localparam int                MEM_DEPTH = 4096;
+     localparam int                AXI_BYTES = AXI_DATA_W / 8;
      typedef bit [AXI_DATA_W-1:0]  data_word_t;
      data_word_t                   mem [0:MEM_DEPTH-1];
      bit                           mem_written [0:MEM_DEPTH-1];
@@ -175,6 +176,11 @@ class axi3_slave_bfm extends uvm_component;
      task automatic drive_read_queue();
      int idx;
      active_read_t ar;
+     int unsigned nbytes;
+     int unsigned byte_off;
+     int unsigned abs_byte;
+     int unsigned wi;
+     int unsigned li;
      logic [AXI_DATA_W-1:0] rdata;
           forever begin
                @(posedge vif.ACLK);
@@ -197,12 +203,19 @@ class axi3_slave_bfm extends uvm_component;
                repeat ($urandom_range(0,3)) @(posedge vif.ACLK);
 
                // ======== SEND ONE R BEAT ========
-               if (ar.mem_idx < MEM_DEPTH)
-                    rdata     = mem[ar.mem_idx];
-               else
-                    rdata     = '0;
+               rdata = '0;
+               nbytes   = 1 << ar.size;
+               byte_off = ar.addr[$clog2(AXI_DATA_W/8)-1:0];
 
-               `uvm_info("AXI3_BFM", $sformatf("TOOK READ: id=%d, idx=0x%0d rdata=%0h", ar.id, idx, rdata), apb2axi_verbosity)
+               for (int b = 0; b < nbytes; b++) begin
+                    abs_byte = byte_off + b;
+                    wi = ar.mem_idx + (abs_byte / AXI_BYTES);
+                    li = abs_byte % AXI_BYTES;
+                    if (wi < MEM_DEPTH)
+                         rdata[8*b +: 8] = mem[wi][8*li +: 8];
+               end
+
+               `uvm_info("AXI3_BFM", $sformatf("TOOK READ: id=%d, idx=0x%0d rdata=%0h", ar.id, wi, rdata), apb2axi_verbosity)
 
                vif.RID        <= ar.id;
                vif.RDATA      <= rdata;
@@ -226,11 +239,17 @@ class axi3_slave_bfm extends uvm_component;
 
                // ======== UPDATE STATE ========
                // Move memory pointer
-               if (ar.burst == 2'b01) // INCR
-                    ar.mem_idx++;
+               // if (ar.burst == 2'b01) // INCR
+               //      ar.mem_idx++;
 
                ar.beats_left--;
                ar.beat_idx++;
+
+               if (ar.burst == 2'b01) begin
+                    ar.addr += nbytes;
+                    if ((byte_off + nbytes) >= AXI_BYTES)
+                    ar.mem_idx++;
+               end
 
                if (ar.beats_left == 0) begin
                     active_reads.delete(idx);

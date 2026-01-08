@@ -17,7 +17,7 @@ module apb2axi_directory #()(
      input  directory_entry_t           reg_dir_alloc_entry,          // Descriptor
      output logic                       reg_dir_alloc_rdy,            // Can accept?
 
-     input  logic                       reg_rd_dir_entry_consumed,    // APB says: done with this TAG (consumed)
+     input  logic [TAG_NUM-1:0]         reg_rd_dir_entry_consumed,    // APB says: done with this TAG (consumed)
      input  logic                       reg_wr_dir_entry_consumed,    // APB says: done with this TAG (consumed)
 
      input  logic [TAG_W-1:0]           reg_dir_tag_sel,              // which TAG to inspect (status read)
@@ -30,7 +30,9 @@ module apb2axi_directory #()(
 
      input  logic                       cq_dir_cpl_vld,               // Txn stored in handler, all beats recieved from AXI
      input  completion_entry_t          cq_dir_cpl_entry,             // The completion entry
-     output logic                       cq_dir_cpl_rdy
+     output logic                       cq_dir_cpl_rdy,
+
+     output logic [TAG_NUM-1:0][2:0]    dir_rsp_tag_size   // NEW: size per tag (pclk)
 
 );
 
@@ -93,7 +95,7 @@ module apb2axi_directory #()(
                end
                if (state[reg_dir_tag_sel_d] == ST_COMPLETE) begin                    // COMPLETE -> EMPTY (all consumed, can be cleared)
                     if(
-                         (reg_rd_dir_entry_consumed & ~entry[reg_dir_tag_sel_d].is_write) |
+                         (reg_rd_dir_entry_consumed[reg_dir_tag_sel_d] & ~entry[reg_dir_tag_sel_d].is_write) |
                          (reg_wr_dir_entry_consumed &  entry[reg_dir_tag_sel_d].is_write)
                     ) begin
                          state[reg_dir_tag_sel_d]                  <= ST_EMPTY;
@@ -132,6 +134,16 @@ module apb2axi_directory #()(
                end
           end
      end
+
+     // =============================================================
+     // SIZE per-TAG
+     // =============================================================
+     genvar i;
+     generate
+          for (i = 0; i < TAG_NUM; i++) begin : GEN_DIR_SIZE
+               assign dir_rsp_tag_size[i] = entry[i].size;
+          end
+     endgenerate
 
 
 // ==========================================================================================================================

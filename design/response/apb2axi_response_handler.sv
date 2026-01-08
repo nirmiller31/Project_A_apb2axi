@@ -32,7 +32,9 @@ module apb2axi_response_handler #()(
     // Directory completion
     output logic                                    cq_dir_cpl_vld,
     output completion_entry_t                       cq_dir_cpl_entry,
-    input  logic                                    cq_dir_cpl_rdy
+    input  logic                                    cq_dir_cpl_rdy,
+
+    input logic [TAG_NUM-1:0][2:0]                  dir_rsp_tag_size
 
 );
 
@@ -71,6 +73,8 @@ module apb2axi_response_handler #()(
     logic                                   cur_valid[TAG_NUM];
     logic [$clog2(AXI_DATA_W):0]            cur_idx  [TAG_NUM];
 
+    logic [2:0]                             rd_size [TAG_NUM];
+
     assign rsp_rdf_pop_rdy                  = (count[rsp_rdf_pop_payload.tag] < MAX_BEATS_NUM);    // stall when per-tag FIFO is full
 
     genvar gt;
@@ -83,24 +87,65 @@ module apb2axi_response_handler #()(
     // ======================================================================
     // "word head"
     // ======================================================================
+    // generate
+    //     for (gt = 0; gt < TAG_NUM; gt++) begin : GEN_PEEK
+    //         always_comb begin
+    //             rdf_reg_data_out[gt]                = '0;
+    //             rdf_reg_data_last[gt]               = 1'b0;
+
+    //             if (cur_valid[gt]) begin                // If mid-slice: peek current slice
+    //                 rdf_reg_data_out[gt]            = cur_data[gt][cur_idx[gt] +: APB_DATA_W];
+    //                 if (cur_last[gt] && (cur_idx[gt] + APB_DATA_W == AXI_DATA_W) && (count[gt] == 0)) begin
+    //                     rdf_reg_data_last[gt]       = 1'b1;
+    //                 end                                 // "last" is true only on the FINAL slice of FINAL beat for this tag
+    //             end
+    //             else if (count[gt] != 0) begin          // Else if FIFO has a beat: peek first slice of FIFO head
+    //                 rdf_reg_data_out[gt]            = tag_mem[gt][head[gt]].data[0 +: APB_DATA_W];
+    //                 if (AXI_DATA_W == APB_DATA_W) begin // If entire AXI beat fits in one APB word, last can be true right away
+    //                     if (tag_mem[gt][head[gt]].last && (count[gt] == 1)) begin
+    //                         rdf_reg_data_last[gt]   = 1'b1;
+    //                     end
+    //                 end
+    //             end
+    //         end
+    //     end
+    // endgenerate
+
     generate
         for (gt = 0; gt < TAG_NUM; gt++) begin : GEN_PEEK
             always_comb begin
-                rdf_reg_data_out[gt]                = '0;
-                rdf_reg_data_last[gt]               = 1'b0;
+                int unsigned            valid_bits;
+                logic [APB_DATA_W-1:0]  slice;
+                logic [APB_DATA_W-1:0]  mask;
 
-                if (cur_valid[gt]) begin                // If mid-slice: peek current slice
-                    rdf_reg_data_out[gt]            = cur_data[gt][cur_idx[gt] +: APB_DATA_W];
-                    if (cur_last[gt] && (cur_idx[gt] + APB_DATA_W == AXI_DATA_W) && (count[gt] == 0)) begin
-                        rdf_reg_data_last[gt]       = 1'b1;
-                    end                                 // "last" is true only on the FINAL slice of FINAL beat for this tag
+                valid_bits = (1 << dir_rsp_tag_size[gt]) * 8;
+
+                rdf_reg_data_out[gt]  = '0;
+                rdf_reg_data_last[gt] = 1'b0;
+
+                if (cur_valid[gt]) begin
+                    // Mid-slice
+                    if (cur_idx[gt] < valid_bits)
+                        mask  = (valid_bits >= APB_DATA_W) ? {APB_DATA_W{1'b1}} : ((1 << valid_bits) - 1);
+                        slice = cur_data[gt][cur_idx[gt] +: APB_DATA_W];
+    
+                        rdf_reg_data_out[gt] = slice & mask;
+                    // LAST on final *valid* slice of final beat
+                    if (cur_last[gt] && (cur_idx[gt] + APB_DATA_W >= valid_bits) && (count[gt] == 0)) begin
+                        rdf_reg_data_last[gt] = 1'b1;
+                    end
                 end
-                else if (count[gt] != 0) begin          // Else if FIFO has a beat: peek first slice of FIFO head
-                    rdf_reg_data_out[gt]            = tag_mem[gt][head[gt]].data[0 +: APB_DATA_W];
-                    if (AXI_DATA_W == APB_DATA_W) begin // If entire AXI beat fits in one APB word, last can be true right away
-                        if (tag_mem[gt][head[gt]].last && (count[gt] == 1)) begin
-                            rdf_reg_data_last[gt]   = 1'b1;
-                        end
+                else if (count[gt] != 0) begin
+                    // First slice of a new beat
+                    if (valid_bits > 0)
+                        mask  = (valid_bits >= APB_DATA_W) ? {APB_DATA_W{1'b1}} : ((1 << valid_bits) - 1);
+                        slice = tag_mem[gt][head[gt]].data[0 +: APB_DATA_W];
+    
+                        rdf_reg_data_out[gt] = slice & mask;
+
+                    // If only one valid slice in this beat
+                    if (tag_mem[gt][head[gt]].last && (APB_DATA_W >= valid_bits) && (count[gt] == 1)) begin
+                        rdf_reg_data_last[gt] = 1'b1;
                     end
                 end
             end
@@ -151,14 +196,23 @@ module apb2axi_response_handler #()(
                     end
                     else begin                          // New beat
                         rd_beat_t beat;
+                        int unsigned valid_bits;
                         beat                    = tag_mem[t][head[t]];
                         head[t]                 <= head[t] + 1'b1;
 
-                        if (AXI_DATA_W != APB_DATA_W) begin
-                            cur_valid[t]        <= 1'b1;
-                            cur_idx[t]          <= APB_DATA_W;
-                            cur_data[t]         <= beat.data;
-                            cur_last[t]         <= beat.last;
+                        valid_bits = (1 << dir_rsp_tag_size[t]) * 8;
+
+                        if (valid_bits > APB_DATA_W) begin
+                            cur_valid[t] <= 1'b1;
+                            cur_idx[t]   <= APB_DATA_W;
+                            cur_data[t]  <= beat.data;
+                            cur_last[t]  <= beat.last;
+                        end else begin
+                            // Only one APB word is valid in this beat (e.g. SIZE=0/1/2)
+                            cur_valid[t] <= 1'b0;
+                            cur_idx[t]   <= '0;
+                            cur_data[t]  <= '0;
+                            cur_last[t]  <= 1'b0;
                         end
                     end
                 end

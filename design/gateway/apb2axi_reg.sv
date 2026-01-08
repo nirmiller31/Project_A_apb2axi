@@ -25,7 +25,7 @@ module apb2axi_reg #()(
      output logic                  reg_dir_alloc_vld,
      output directory_entry_t      reg_dir_alloc_entry,
 
-     output logic                  reg_rd_dir_entry_consumed,
+     output logic [TAG_NUM-1:0]    reg_rd_dir_entry_consumed,
      output logic                  reg_wr_dir_entry_consumed,
 
      output logic [TAG_W-1:0]      reg_dir_tag_sel,
@@ -186,13 +186,13 @@ module apb2axi_reg #()(
      always_ff @(posedge pclk) begin
           if (!presetn) begin
                reg_wr_dir_entry_consumed <= 1'b0;
-               reg_rd_dir_entry_consumed <= 1'b0;
+               reg_rd_dir_entry_consumed <= '0;
           end else begin
                reg_wr_dir_entry_consumed <= 1'b0;
-               reg_rd_dir_entry_consumed <= 1'b0;
+               reg_rd_dir_entry_consumed <= '0;
                if (rd_data_re && rdf_reg_data_vld[rd_tag] && rdf_reg_data_rdy[rd_tag]) begin
                     if (rdf_reg_data_last[rd_tag]) begin
-                         reg_rd_dir_entry_consumed <= 1'b1;
+                         reg_rd_dir_entry_consumed[rd_tag] <= 1'b1;
                     end
                end
                if (rd_status_re) begin
