@@ -238,10 +238,6 @@ class axi3_slave_bfm extends uvm_component;
                if (ar.beats_left == 1) burst_order_q.push_back(ar.id);
 
                // ======== UPDATE STATE ========
-               // Move memory pointer
-               // if (ar.burst == 2'b01) // INCR
-               //      ar.mem_idx++;
-
                ar.beats_left--;
                ar.beat_idx++;
 

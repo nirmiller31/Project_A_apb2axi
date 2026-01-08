@@ -65,7 +65,7 @@ class apb2axi_base_seq extends uvm_sequence #(apb_seq_item);
           cmd[DIR_ENTRY_ISWRITE_HI]                    = is_write;
           cmd[DIR_ENTRY_SIZE_HI : DIR_ENTRY_SIZE_LO]   = size;
           cmd[DIR_ENTRY_LEN_HI : DIR_ENTRY_LEN_LO]     = len;
-          
+
           apb_write(REG_ADDR_CMD, cmd);
      endtask
 
@@ -99,7 +99,7 @@ class apb2axi_base_seq extends uvm_sequence #(apb_seq_item);
 
           if (!std::randomize(address) with {
                address inside {[64'h0000_0000_0000_1000 : 64'h0000_0000_0000_17F8]};
-               address[2:0] == 3'b000;                 // 8-byte aligned
+               // address[2:0] == 3'b000;                 // 8-byte aligned
           }) begin
                `uvm_fatal("ADDR_RAND", "std::randomize() failed for rand_addr_in_range_aligned()")
           end
