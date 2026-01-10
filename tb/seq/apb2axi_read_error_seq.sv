@@ -2,7 +2,6 @@
 // File : tb/seq/apb2axi_read_error_seq.sv
 // Desc : Read error injection verification (policy-aware) + err_beat_idx
 //        Policy comes from +RESP_POLICY=<0|1> (default 0)
-// SV   : 1800-2005 safe
 //------------------------------------------------------------------------------
 
 import uvm_pkg::*;
@@ -195,7 +194,10 @@ class apb2axi_read_error_seq extends apb2axi_base_seq;
           bit [TAG_W-1:0] tag = '0;
           int unsigned beats = 4;   // len=3
 
-          if ($test$plusargs("RESP_POLICY_WORST")) policy = 1;
+          if ($test$plusargs("RESP_POLICY_WORST")) begin
+               policy = 1;
+               program_resp_policy_worst();
+          end
           `uvm_info(get_name(), $sformatf("Starting read-error seq (policy=%0d; 0=FIRST,1=WORST)", policy), UVM_NONE)
 
           clear_read_injection(tag);
@@ -230,10 +232,11 @@ class apb2axi_read_error_seq extends apb2axi_base_seq;
 
           addr = rand_addr_in_range_aligned();
           program_read_cmd(beats-1);
-          program_addr(addr);
-
+          
           m_env.axi_bfm.inject_read_error(tag, 1, AXI_RESP_SLVERR);
           m_env.axi_bfm.inject_read_error(tag, 3, AXI_RESP_DECERR);
+
+          program_addr(addr);
 
           wait_completion_no_fatal(tag, done, error, resp, num_beats, err_idx);
 
@@ -254,10 +257,11 @@ class apb2axi_read_error_seq extends apb2axi_base_seq;
 
           addr = rand_addr_in_range_aligned();
           program_read_cmd(beats-1);
-          program_addr(addr);
 
           m_env.axi_bfm.inject_read_error(tag, 0, AXI_RESP_SLVERR);
           m_env.axi_bfm.inject_read_error(tag, 2, AXI_RESP_SLVERR);
+
+          program_addr(addr);
 
           wait_completion_no_fatal(tag, done, error, resp, num_beats, err_idx);
 

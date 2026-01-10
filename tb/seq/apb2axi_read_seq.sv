@@ -42,48 +42,76 @@ class apb2axi_read_seq extends apb2axi_base_seq;
           bit [AXI_SIZE_W-1:0]  size,
           int                   word_idx
      );
+          localparam int unsigned AXI_BYTES = AXI_DATA_W / 8;
+          localparam int unsigned APB_BYTES = APB_DATA_W / 8;
+
+          int unsigned bytes_per_beat_req;
           int unsigned bytes_per_beat;
-          int unsigned apb_words_per_beat;
-          int unsigned beat_i;
-          int unsigned slice_i;
 
-          bit [63:0] beat_addr;
-          bit [AXI_DATA_W-1:0] rdata64;
-          bit [APB_DATA_W-1:0] w;
+          bit [63:0]            addr;
+          bit [APB_DATA_W-1:0]  w;
 
-          // AXI semantics
-          bytes_per_beat     = (1 << int'(size));                 // 1,2,4,8 for size 0..3 (64b bus)
-          apb_words_per_beat = (bytes_per_beat + 3) / 4;          // ceil(bytes/4): 1 for 1/2/4B, 2 for 8B
+          bytes_per_beat_req = (1 << int'(size));
+          bytes_per_beat     = (bytes_per_beat_req > AXI_BYTES) ? AXI_BYTES : bytes_per_beat_req;
 
-          beat_i  = word_idx / apb_words_per_beat;
-          slice_i = word_idx % apb_words_per_beat;
+          w = '0;
 
-          // Beat start address (INCR)
-          beat_addr = base_addr + (beat_i * bytes_per_beat);
+          // =========================================================
+          // CASE A: AXI beat smaller than APB word (SIZE = 0,1) -> 1 APB word == 1 AXI beat
+          // =========================================================
+          if (bytes_per_beat < APB_BYTES) begin
+               addr = base_addr + (word_idx * bytes_per_beat);
 
-          // Build expected RDATA (low bytes filled, rest zero)
-          rdata64 = '0;
-          for (int b = 0; b < int'(bytes_per_beat); b++) begin
-               bit [63:0] a;
-               int unsigned idx;
-               int unsigned byte_off;
-               bit [7:0]    byt;
+               for (int b = 0; b < bytes_per_beat; b++) begin
+                    bit [63:0]   a;
+                    int unsigned mem_i;
+                    int unsigned byte_off;
 
-               a        = beat_addr + b;
-               idx      = addr2idx(a);          // your MEM is 8-byte words (>>3)
-               byte_off = a[2:0];               // byte within the 64-bit word
+                    a        = addr + b;
+                    mem_i    = addr2idx(a);
+                    byte_off = a[$clog2(AXI_BYTES)-1:0];
 
-               if (idx < MEM_WORDS)
-                    byt = MEM[idx][8*byte_off +: 8];
-               else
-                    byt = 8'h00;
+                    if (mem_i < MEM_WORDS)
+                         w[8*b +: 8] = MEM[mem_i][8*byte_off +: 8];
+               end
 
-               rdata64[8*b +: 8] = byt;         // little-endian placement inside the beat
+               `uvm_info("RD_EXP", $sformatf("EXP[S<APB] word=%0d addr=0x%0h bytes=%0d exp=0x%08x", word_idx, addr, bytes_per_beat, w), UVM_NONE);
           end
 
-          // Slice to APB 32-bit word
-          if (slice_i == 0) w = rdata64[31:0];
-          else              w = rdata64[63:32];
+          // =========================================================
+          // CASE B: AXI beat >= APB word (SIZE >= 2) -> slicing inside beat
+          // =========================================================
+          else begin
+               int unsigned apb_words_per_beat;
+               int unsigned beat_i;
+               int unsigned slice_i;
+               bit [AXI_DATA_W-1:0] rdata;
+
+               apb_words_per_beat = bytes_per_beat / APB_BYTES;
+
+               beat_i  = word_idx / apb_words_per_beat;
+               slice_i = word_idx % apb_words_per_beat;
+
+               addr = base_addr + (beat_i * bytes_per_beat);
+
+               rdata = '0;
+               for (int b = 0; b < bytes_per_beat; b++) begin
+                    bit [63:0]   a;
+                    int unsigned mem_i;
+                    int unsigned byte_off;
+
+                    a        = addr + b;
+                    mem_i    = addr2idx(a);
+                    byte_off = a[$clog2(AXI_BYTES)-1:0];
+
+                    if (mem_i < MEM_WORDS)
+                         rdata[8*b +: 8] = MEM[mem_i][8*byte_off +: 8];
+               end
+
+               w = rdata[slice_i*APB_DATA_W +: APB_DATA_W];
+
+               `uvm_info("RD_EXP", $sformatf("EXP[S>=APB] word=%0d beat=%0d slice=%0d addr=0x%0h exp=0x%08x", word_idx, beat_i, slice_i, addr, w), UVM_NONE);
+          end
 
           return w;
      endfunction

@@ -38,30 +38,84 @@ class apb2axi_write_seq extends apb2axi_base_seq;
           end
      endtask
 
-	task automatic compare_all_writes(wr_txn_t txns[], int unsigned num_txns);
-          bit [AXI_DATA_W-1:0]     got64;
-          bit [AXI_DATA_W-1:0]     exp64;
+     task automatic compare_all_writes(wr_txn_t txns[], int unsigned num_txns);
+          bit [AXI_DATA_W-1:0]     got_line;
           bit                      ok;
+
           bit [AXI_ADDR_W-1:0]     addr;
+          bit [AXI_ADDR_W-1:0]     line_addr;
+
+          bit mismatch;
+
+          localparam int unsigned AXI_BYTES = (AXI_DATA_W/8);
+          localparam int unsigned APB_BYTES = (APB_DATA_W/8);
+
+          localparam int unsigned WRITE_SIZE_DEFAULT = 3;
+          localparam int unsigned BYTES_PER_BEAT     = (1 << WRITE_SIZE_DEFAULT); // 8
+          localparam int unsigned BITS_PER_BEAT      = BYTES_PER_BEAT * 8;        // 64
 
           for (int i = 0; i < num_txns; i++) begin
+               // For SIZE=3 and APB=32b => 2 APB words per beat
+               int unsigned apb_words_per_beat;
+               apb_words_per_beat = (BYTES_PER_BEAT + APB_BYTES - 1) / APB_BYTES; // ceil (safe)
+
                for (int unsigned beat = 0; beat < txns[i].beats; beat++) begin
+                    int unsigned byte_off;   // byte offset inside AXI line
+                    int unsigned bit_off;    // bit offset inside AXI line
 
-                    addr = txns[i].addr + beat*(AXI_DATA_W/8);
+                    bit [BITS_PER_BEAT-1:0] exp_lane; // 64b
+                    bit [BITS_PER_BEAT-1:0] got_lane; // 64b
 
-                    exp64 = {
-                         txns[i].apb_words[beat*APB_WORDS_PER_AXI_BEAT + 1],
-                         txns[i].apb_words[beat*APB_WORDS_PER_AXI_BEAT + 0]
-                    };
+                    addr = txns[i].addr + beat * BYTES_PER_BEAT;
 
-                    peek_axi_word64(addr, got64, ok);
+                    line_addr = addr & ~(AXI_BYTES-1);
 
-                    if (!ok) `uvm_fatal("WR_CMP", $sformatf("Backdoor peek failed addr=0x%0h", addr))
-                    if (got64 !== exp64) `uvm_error("WR_CMP", $sformatf("MISMATCH TXN=%0d TAG=%0d BEAT=%0d addr=0x%0h exp=0x%0h got=0x%0h", i, txns[i].tag, beat, addr, exp64, got64))
-                    `uvm_info("WR_CMP", $sformatf("MATCH TXN=%0d TAG=%0d BEAT=%0d addr=0x%0h data=0x%0h", i, txns[i].tag, beat, addr, got64), UVM_NONE)
+                    byte_off  = addr[$clog2(AXI_BYTES)-1:0];
+                    bit_off   = byte_off * 8;
+
+                    exp_lane = '0;
+                    for (int unsigned b = 0; b < BYTES_PER_BEAT; b++) begin
+                         int unsigned apb_word_idx;
+                         int unsigned byte_in_apb;
+                         bit [7:0]    byt;
+
+                         apb_word_idx = beat * apb_words_per_beat + (b / APB_BYTES);
+                         byte_in_apb  = b % APB_BYTES;
+
+                         byt = txns[i].apb_words[apb_word_idx][8*byte_in_apb +: 8];
+                         exp_lane[8*b +: 8] = byt;
+                    end
+
+                    peek_axi_word64(line_addr, got_line, ok);
+                    if (!ok)
+                         `uvm_fatal("WR_CMP", $sformatf("Backdoor peek failed line_addr=0x%0h (orig addr=0x%0h)", line_addr, addr))
+
+                    got_lane = '0;
+                    for (int unsigned b = 0; b < BYTES_PER_BEAT; b++) begin
+                         got_lane[8*b +: 8] = got_line[bit_off + 8*b +: 8];
+                    end
+
+                    mismatch = 1'b0;
+                    for (int unsigned b = 0; b < BYTES_PER_BEAT; b++) begin
+                         if (got_lane[8*b +: 8] !== exp_lane[8*b +: 8])
+                              mismatch = 1'b1;
+                    end
+
+                    if (mismatch) begin
+                         `uvm_error("WR_CMP", $sformatf(
+                              "MISMATCH TXN=%0d TAG=%0d BEAT=%0d addr=0x%0h line_addr=0x%0h byte_off=%0d exp=0x%016h got=0x%016h got_line=0x%0h",
+                              i, txns[i].tag, beat, addr, line_addr, byte_off,
+                              exp_lane, got_lane, got_line
+                         ))
+                    end else begin
+                         `uvm_info("WR_CMP", $sformatf(
+                              "MATCH TXN=%0d TAG=%0d BEAT=%0d addr=0x%0h lane=0x%016h (line_addr=0x%0h off=%0d)",
+                              i, txns[i].tag, beat, addr, got_lane, line_addr, byte_off
+                         ), UVM_NONE)
+                    end
                end
           end
-	endtask
+     endtask
 
      virtual task body();
           uvm_phase phase;

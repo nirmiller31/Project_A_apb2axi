@@ -13,8 +13,7 @@ module apb2axi #(
      parameter int APB_DATA_W      = APB_DATA_W,
      parameter int AXI_ADDR_W      = AXI_ADDR_W,
      parameter int AXI_DATA_W      = AXI_DATA_W,
-     parameter int AXI_ID_W        = AXI_ID_W,
-     parameter int RESP_POLICY     = 0
+     parameter int AXI_ID_W        = AXI_ID_W
 )(
      // -------------------------
      // APB Slave Interface
@@ -78,6 +77,10 @@ module apb2axi #(
      output logic                  RREADY
 );
 
+     // =========================================================================
+     // Reg File -> Response Collector
+     // =========================================================================
+     logic                    resp_policy_cfg;
      // =========================================================================
      // Register File <-> Directory
      // =========================================================================
@@ -235,7 +238,9 @@ module apb2axi #(
 
           .wr_word_valid(wr_word_valid),
           .wr_word_tag  (wr_word_tag),
-          .wr_word_data (wr_word_data)
+          .wr_word_data (wr_word_data),
+
+          .resp_policy_cfg(resp_policy_cfg)
      );
      // =========================================================================
      // WRITE PACKER
@@ -282,7 +287,6 @@ module apb2axi #(
      // RESPONSE COLLECTOR
      // =========================================================================
      apb2axi_response_collector #(
-          .RESP_POLICY(RESP_POLICY)
      ) u_resp_collector (
           .aclk(ACLK),
           .aresetn(ARESETn),
@@ -305,7 +309,9 @@ module apb2axi #(
 
           .rsp_cq_push_vld(rsp_cq_push_vld),
           .rsp_cq_push_rdy(rsp_cq_push_rdy),
-          .rsp_cq_push_data(rsp_cq_push_data)
+          .rsp_cq_push_data(rsp_cq_push_data),
+
+          .resp_policy_cfg(resp_policy_cfg)
      );
      // =========================================================================
      // TRANSACTION MANAGER

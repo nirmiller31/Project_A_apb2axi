@@ -174,14 +174,14 @@ class axi3_slave_bfm extends uvm_component;
      // R-channel driver when using outstanding modes
      // ------------------------------------------------------------
      task automatic drive_read_queue();
-     int idx;
-     active_read_t ar;
-     int unsigned nbytes;
-     int unsigned byte_off;
-     int unsigned abs_byte;
-     int unsigned wi;
-     int unsigned li;
-     logic [AXI_DATA_W-1:0] rdata;
+          int idx;
+          active_read_t ar;
+          int unsigned nbytes;
+          int unsigned byte_off;
+          int unsigned abs_byte;
+          int unsigned wi;
+          int unsigned li;
+          logic [AXI_DATA_W-1:0] rdata;
           forever begin
                @(posedge vif.ACLK);
                // No active reads -> wait
@@ -203,16 +203,24 @@ class axi3_slave_bfm extends uvm_component;
                repeat ($urandom_range(0,3)) @(posedge vif.ACLK);
 
                // ======== SEND ONE R BEAT ========
-               rdata = '0;
-               nbytes   = 1 << ar.size;
-               byte_off = ar.addr[$clog2(AXI_DATA_W/8)-1:0];
+               rdata  = '0;
+               nbytes = 1 << ar.size;
 
                for (int b = 0; b < nbytes; b++) begin
-                    abs_byte = byte_off + b;
-                    wi = ar.mem_idx + (abs_byte / AXI_BYTES);
-                    li = abs_byte % AXI_BYTES;
-                    if (wi < MEM_DEPTH)
-                         rdata[8*b +: 8] = mem[wi][8*li +: 8];
+                    longint unsigned a;
+                    int unsigned idx;
+                    int unsigned byte_off8;
+                    byte a_byte;
+
+                    a         = ar.addr + b;        // absolute byte address
+                    idx       = addr2idx(a);        // 8-byte-word index (>>3)
+                    byte_off8 = a[$clog2(AXI_BYTES)-1:0];             // byte within 64-bit MEM word
+
+                    a_byte = 8'h00;
+                    if (idx < MEM_DEPTH)
+                         a_byte = mem[idx][8*byte_off8 +: 8];
+
+                    rdata[8*b +: 8] = a_byte;
                end
 
                `uvm_info("AXI3_BFM", $sformatf("TOOK READ: id=%d, idx=0x%0d rdata=%0h", ar.id, wi, rdata), apb2axi_verbosity)

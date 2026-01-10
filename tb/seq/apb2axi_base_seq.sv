@@ -100,6 +100,7 @@ class apb2axi_base_seq extends uvm_sequence #(apb_seq_item);
           if (!std::randomize(address) with {
                address inside {[64'h0000_0000_0000_1000 : 64'h0000_0000_0000_17F8]};
                // address[2:0] == 3'b000;                 // 8-byte aligned
+               address[3:0] == 4'b0000;                 // 16-byte aligned
           }) begin
                `uvm_fatal("ADDR_RAND", "std::randomize() failed for rand_addr_in_range_aligned()")
           end
@@ -159,6 +160,26 @@ class apb2axi_base_seq extends uvm_sequence #(apb_seq_item);
           result = base + (int'(tag) * TAG_STRIDE_BYTES);
           return result;
      endfunction
+
+     // =================================================
+     // Response policy helpers
+     // =================================================
+     task automatic program_resp_policy_worst();
+          bit [APB_DATA_W-1:0] rd;
+          bit                  slverr;
+
+          // Write 1 -> resp_policy_cfg (LSB)
+          apb_write(REG_RESP_POLICY, 32'h1);
+
+          // Optional sanity readback (keeps debug easy)
+          apb_read(REG_RESP_POLICY, rd, slverr);
+          if (slverr) begin
+               `uvm_fatal(get_name(), "RESP_POLICY readback PSLVERR")
+          end
+          if (rd[0] !== 1'b1) begin
+               `uvm_fatal(get_name(), $sformatf("RESP_POLICY readback mismatch: got 0x%08h (expected LSB=1)", rd))
+          end
+     endtask
 
      // =================================================
      // Write data helpers

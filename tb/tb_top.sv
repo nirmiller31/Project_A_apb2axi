@@ -4,12 +4,6 @@ import apb2axi_tb_pkg::*;
 
 module tb_top;
 
-     `ifdef RESP_POLICY_WORST
-     localparam int DUT_RESP_POLICY = 1;
-     `else
-     localparam int DUT_RESP_POLICY = 0;
-     `endif
-
      localparam time APB_CLK_DELAY = 5ns;
      localparam time AXI_CLK_DELAY = 5ns;
 
@@ -49,9 +43,7 @@ module tb_top;
           .ARESETn(ARESETn)
      );
 
-     apb2axi #(
-          .RESP_POLICY(DUT_RESP_POLICY)
-     ) dut (
+     apb2axi #() dut (
           // ------------------ APB side ------------------
           .PCLK      (PCLK),
           .PRESETn   (PRESETn),

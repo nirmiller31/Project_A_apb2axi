@@ -55,6 +55,7 @@ package apb2axi_pkg;
      parameter logic [APB_ADDR_W-1:0] REG_ADDR_ADDR_HI      = 16'h0004;
      parameter logic [APB_ADDR_W-1:0] REG_ADDR_CMD          = 16'h0008;
      parameter logic [APB_ADDR_W-1:0] REG_ADDR_RD_TAG_SEL   = 16'h000C;
+     parameter logic [APB_ADDR_W-1:0] REG_RESP_POLICY       = 16'h0014;
 
      parameter logic [APB_ADDR_W-1:0] REG_ADDR_RD_STATUS    = 16'h0100;
      parameter logic [APB_ADDR_W-1:0] REG_ADDR_RD_DATA      = 16'h0200;

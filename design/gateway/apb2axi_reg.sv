@@ -37,26 +37,20 @@ module apb2axi_reg #()(
      input logic [TAG_NUM-1:0]                      rdf_reg_data_last,
      output logic [TAG_NUM-1:0]                     rdf_reg_data_rdy,
 
-     output logic                  wr_word_valid,   // change
-     output logic [TAG_W-1:0]      wr_word_tag,     // change
-     output logic [APB_DATA_W-1:0] wr_word_data        // change
+     output logic                  wr_word_valid,
+     output logic [TAG_W-1:0]      wr_word_tag,
+     output logic [APB_DATA_W-1:0] wr_word_data,
+
+     output logic                  resp_policy_cfg
 );
 
-     // ----------------------------------------------------------------
-     // Local address decode (word-based, 32-bit aligned)
-     //  0x00 : ADDR_LO
-     //  0x04 : ADDR_HI
-     //  0x08 : CMD
-     //  0x0C : RD_STATUS (RO)
-     //  0x10 : RD_DATA   (RO, streaming)
-     //  0x14 : TAG_TO_CONSUME
-     // ----------------------------------------------------------------
      logic [APB_REG_W-1:0]         addr_lo_rd_val;
      logic [APB_REG_W-1:0]         addr_hi_rd_val;
      logic [APB_REG_W-1:0]         cmd_rd_val;
      logic [APB_REG_W-1:0]         tag_to_consume_rd_val;
      logic [APB_REG_W-1:0]         sts_rd_val;
      logic [APB_REG_W-1:0]         data_rd_val;
+     logic [APB_REG_W-1:0]         resp_policy_rd_val;
 
      logic                         sel_addr_lo, sel_addr_hi, sel_cmd, sel_rd_status, sel_rd_data, sel_tag_to_consume;
      logic                         addr_lo_we, addr_lo_we_d, addr_hi_we, cmd_we, tag_to_consume_we;
@@ -72,10 +66,12 @@ module apb2axi_reg #()(
      logic                         sel_rd_status_tag;
      logic                         sel_rd_data_tag;
      logic                         sel_wr_data_tag;
+     logic                         sel_resp_policy_cfg;
 
      logic                         rd_status_re;
      logic                         rd_data_re;
      logic                         wr_data_we;
+     logic                         resp_policy_we;
 
      assign sel_rd_status_tag      = (paddr >= RD_STATUS_BASE)   && (paddr <  (RD_STATUS_BASE + TAG_WINDOW_BYTES));
      assign sel_rd_data_tag        = (paddr >= RD_DATA_BASE)     && (paddr <  (RD_DATA_BASE + TAG_WINDOW_BYTES));
@@ -93,12 +89,14 @@ module apb2axi_reg #()(
      assign sel_addr_hi            = ({paddr[APB_ADDR_W-1:2], 2'b00} == REG_ADDR_ADDR_HI);
      assign sel_cmd                = ({paddr[APB_ADDR_W-1:2], 2'b00} == REG_ADDR_CMD);
      assign sel_tag_to_consume     = ({paddr[APB_ADDR_W-1:2], 2'b00} == REG_ADDR_RD_TAG_SEL);
+     assign sel_resp_policy_cfg    = ({paddr[APB_ADDR_W-1:2], 2'b00} == REG_RESP_POLICY);
 
      // Write enables for RW regs
      assign addr_lo_we             = psel & penable & pwrite & sel_addr_lo;
      assign addr_hi_we             = psel & penable & pwrite & sel_addr_hi;
      assign cmd_we                 = psel & penable & pwrite & sel_cmd;
      assign tag_to_consume_we      = psel & penable & pwrite & sel_tag_to_consume;
+     assign resp_policy_we         = psel & penable & pwrite & sel_resp_policy_cfg;
 
      // ----------------------------------------------------------------
      // APB write mux
@@ -112,6 +110,7 @@ module apb2axi_reg #()(
                wr_word_valid                                          <= '0;
                wr_word_tag                                            <= '0;
                wr_word_data                                           <= '0;
+               resp_policy_rd_val                                     <= '0;
           end 
           else begin
                if (addr_lo_we)               addr_lo_rd_val           <= pwdata;
@@ -120,9 +119,12 @@ module apb2axi_reg #()(
                if (tag_to_consume_we)        tag_to_consume_rd_val    <= pwdata;
                if (wr_data_we)               wr_word_data             <= pwdata;
                if (wr_data_we)               wr_word_tag              <= wr_tag;
+               if (resp_policy_we)           resp_policy_rd_val       <= pwdata;
                wr_word_valid                                          <= wr_data_we;
           end
      end
+
+     assign resp_policy_cfg = resp_policy_rd_val[0];
 
      // ----------------------------------------------------------------
      // APB read mux
@@ -131,12 +133,13 @@ module apb2axi_reg #()(
           prdata = '0;
           if (!pwrite && psel) begin
                unique case (1'b1)
-                    sel_addr_lo:        prdata = addr_lo_rd_val;
-                    sel_addr_hi:        prdata = addr_hi_rd_val;
-                    sel_cmd:            prdata = cmd_rd_val;
-                    sel_rd_status_tag:  prdata = sts_rd_val;
-                    sel_rd_data_tag:    prdata = data_rd_val;
-                    default:            prdata = '0;
+                    sel_addr_lo:             prdata = addr_lo_rd_val;
+                    sel_addr_hi:             prdata = addr_hi_rd_val;
+                    sel_cmd:                 prdata = cmd_rd_val;
+                    sel_rd_status_tag:       prdata = sts_rd_val;
+                    sel_rd_data_tag:         prdata = data_rd_val;
+                    sel_resp_policy_cfg:     prdata = resp_policy_rd_val;
+                    default:                 prdata = '0;
                endcase
           end
      end

@@ -10,7 +10,6 @@
 import apb2axi_pkg::*;
 
 module apb2axi_response_collector #(
-    parameter int RESP_POLICY       = 0             // 0=FIRST_ERROR, 1=WORST_ERROR
 )(
     input  logic                    aclk,
     input  logic                    aresetn,
@@ -34,7 +33,9 @@ module apb2axi_response_collector #(
     // Completion FIFO IF (AXI side)
     output logic                    rsp_cq_push_vld,
     output logic [CPL_W-1:0]        rsp_cq_push_data,
-    input  logic                    rsp_cq_push_rdy
+    input  logic                    rsp_cq_push_rdy,
+
+    input logic                     resp_policy_cfg             // 0=FIRST_ERROR, 1=WORST_ERROR
 );
 
     completion_entry_t cpl_reg;
@@ -147,7 +148,7 @@ module apb2axi_response_collector #(
                         eff_resp = rr;
                         eff_idx  = curr_beat_idx;
                     end
-                    else if (RESP_POLICY != 0) begin
+                    else if (resp_policy_cfg != 0) begin
                         int old_sev, new_sev;
                         old_sev = resp_severity(eff_resp);
                         new_sev = resp_severity(rr);

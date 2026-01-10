@@ -182,12 +182,14 @@ module apb2axi_response_handler #()(
 
             for (int t = 0; t < TAG_NUM; t++) begin
                 if ((cur_valid[t] || (count[t] != 0)) && rdf_reg_data_rdy[t]) begin
+                    int unsigned valid_bits;
+                    valid_bits = (1 << dir_rsp_tag_size[t]) * 8;
 
                     if (!cur_valid[t])                  // Dequeue (only when we pop a NEW beat from FIFO)
                         dec[t]                  = 1'b1;
                     
                     if (cur_valid[t]) begin             // Slicing
-                        if (cur_idx[t] + APB_DATA_W == AXI_DATA_W) begin
+                        if (cur_idx[t] + APB_DATA_W == valid_bits) begin
                             cur_valid[t]        <= 1'b0;
                             cur_idx[t]          <= '0;
                         end else begin
@@ -196,11 +198,9 @@ module apb2axi_response_handler #()(
                     end
                     else begin                          // New beat
                         rd_beat_t beat;
-                        int unsigned valid_bits;
+                        
                         beat                    = tag_mem[t][head[t]];
                         head[t]                 <= head[t] + 1'b1;
-
-                        valid_bits = (1 << dir_rsp_tag_size[t]) * 8;
 
                         if (valid_bits > APB_DATA_W) begin
                             cur_valid[t] <= 1'b1;
